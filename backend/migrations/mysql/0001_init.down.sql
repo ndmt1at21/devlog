@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS subscriptions;
+DROP TABLE IF EXISTS comments;
+DROP TABLE IF EXISTS series;
+DROP TABLE IF EXISTS articles;
