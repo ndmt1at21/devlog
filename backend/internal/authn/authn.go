@@ -37,6 +37,15 @@ type Provider interface {
 	Refresh(ctx context.Context, refreshToken string) (*TokenSet, error)
 	// UserInfo resolves identity claims for an access token.
 	UserInfo(ctx context.Context, accessToken string) (*User, error)
+
+	// FederatedLoginURL builds the URL that starts a federated (social) login for
+	// the given provider (e.g. "google"). The browser is redirected here; the IdP
+	// dance is handled by IAM, which then redirects back to redirectURI with an
+	// authorization code carrying the passed-through state.
+	FederatedLoginURL(provider, state, redirectURI string) string
+	// ExchangeCode exchanges an authorization code (from the federated callback)
+	// for a token set via the authorization_code grant.
+	ExchangeCode(ctx context.Context, code, redirectURI string) (*TokenSet, error)
 }
 
 var (

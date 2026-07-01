@@ -100,6 +100,29 @@ func (c *Client) Refresh(ctx context.Context, refreshToken string) (*authn.Token
 	})
 }
 
+// FederatedLoginURL builds the tenant's federated-login URL for a provider
+// (google/facebook/oidc). IAM validates client_id + redirect_uri, runs the IdP
+// flow, then redirects back to redirectURI with an IAM authorization code.
+func (c *Client) FederatedLoginURL(provider, state, redirectURI string) string {
+	q := url.Values{
+		"client_id":    {c.clientID},
+		"redirect_uri": {redirectURI},
+		"state":        {state},
+		"scope":        {"openid profile email offline_access"},
+	}
+	return c.issuer + "/auth/login/" + url.PathEscape(provider) + "?" + q.Encode()
+}
+
+// ExchangeCode swaps an authorization code for tokens (authorization_code grant).
+// redirectURI must match the one used to start the flow.
+func (c *Client) ExchangeCode(ctx context.Context, code, redirectURI string) (*authn.TokenSet, error) {
+	return c.token(ctx, url.Values{
+		"grant_type":   {"authorization_code"},
+		"code":         {code},
+		"redirect_uri": {redirectURI},
+	})
+}
+
 // Register creates a self-service account; IAM emails a verification link.
 func (c *Client) Register(ctx context.Context, email, password string) error {
 	payload, _ := json.Marshal(map[string]string{

@@ -2,7 +2,7 @@
 /bin/
 *.exe
 *.out
-server
+/server
 
 # Test & coverage
 *.test

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/ndmt1at21/devlog/backend/internal/apierr"
 	"github.com/ndmt1at21/devlog/backend/internal/domain"
 )
 
@@ -77,47 +78,47 @@ func (a *API) listArticles(w http.ResponseWriter, r *http.Request) {
 	}
 	arts, err := a.Store.Articles().List(r.Context(), f)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Không tải được danh sách bài viết.")
+		writeError(w, r, apierr.ErrArticleList)
 		return
 	}
 	out := make([]articleSummary, 0, len(arts))
 	for _, x := range arts {
 		out = append(out, toSummary(x))
 	}
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, r, http.StatusOK, out)
 }
 
 func (a *API) featuredArticle(w http.ResponseWriter, r *http.Request) {
 	art, err := a.Store.Articles().Featured(r.Context())
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Chưa có bài viết nổi bật.")
+		writeError(w, r, apierr.ErrFeaturedNotFound)
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Không tải được bài viết nổi bật.")
+		writeError(w, r, apierr.ErrArticleLoad.WithMessage("Không tải được bài viết nổi bật."))
 		return
 	}
-	writeJSON(w, http.StatusOK, toSummary(art))
+	writeJSON(w, r, http.StatusOK, toSummary(art))
 }
 
 func (a *API) categories(w http.ResponseWriter, r *http.Request) {
 	cats, err := a.Store.Articles().Categories(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Không tải được danh mục.")
+		writeError(w, r, apierr.ErrCategoryList)
 		return
 	}
-	writeJSON(w, http.StatusOK, cats)
+	writeJSON(w, r, http.StatusOK, cats)
 }
 
 func (a *API) getArticle(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	art, err := a.Store.Articles().GetBySlug(r.Context(), slug)
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Không tìm thấy bài viết.")
+		writeError(w, r, apierr.ErrArticleNotFound)
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Không tải được bài viết.")
+		writeError(w, r, apierr.ErrArticleLoad)
 		return
 	}
 
@@ -159,5 +160,5 @@ func (a *API) getArticle(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, detail)
+	writeJSON(w, r, http.StatusOK, detail)
 }

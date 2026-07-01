@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/ndmt1at21/devlog/backend/internal/apierr"
 	"github.com/ndmt1at21/devlog/backend/internal/domain"
 )
 
@@ -22,14 +23,14 @@ func (a *API) listComments(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	cs, err := a.Store.Comments().ListByArticle(r.Context(), slug)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Không tải được bình luận.")
+		writeError(w, r, apierr.ErrCommentList)
 		return
 	}
 	out := make([]commentDTO, 0, len(cs))
 	for _, c := range cs {
 		out = append(out, toCommentDTO(c))
 	}
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, r, http.StatusOK, out)
 }
 
 func (a *API) createComment(w http.ResponseWriter, r *http.Request) {
@@ -45,17 +46,17 @@ func (a *API) createComment(w http.ResponseWriter, r *http.Request) {
 	in.Name = strings.TrimSpace(in.Name)
 	in.Text = strings.TrimSpace(in.Text)
 	if in.Name == "" {
-		writeError(w, http.StatusBadRequest, "Vui lòng nhập tên của bạn.")
+		writeError(w, r, apierr.ErrValidation.WithMessage("Vui lòng nhập tên của bạn."))
 		return
 	}
 	if in.Text == "" {
-		writeError(w, http.StatusBadRequest, "Bình luận không được để trống.")
+		writeError(w, r, apierr.ErrValidation.WithMessage("Bình luận không được để trống."))
 		return
 	}
 
 	// Ensure the article exists so comments can't be orphaned.
 	if _, err := a.Store.Articles().GetBySlug(r.Context(), slug); err != nil {
-		writeError(w, http.StatusNotFound, "Không tìm thấy bài viết.")
+		writeError(w, r, apierr.ErrArticleNotFound)
 		return
 	}
 
@@ -63,8 +64,8 @@ func (a *API) createComment(w http.ResponseWriter, r *http.Request) {
 		ArticleSlug: slug, Name: in.Name, Body: in.Text,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Không gửi được bình luận.")
+		writeError(w, r, apierr.ErrCommentCreate)
 		return
 	}
-	writeJSON(w, http.StatusCreated, toCommentDTO(created))
+	writeJSON(w, r, http.StatusCreated, toCommentDTO(created))
 }

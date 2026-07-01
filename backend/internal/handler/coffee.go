@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/ndmt1at21/devlog/backend/internal/apierr"
 	"github.com/ndmt1at21/devlog/backend/internal/domain"
 	"github.com/ndmt1at21/devlog/backend/internal/payment"
 	"github.com/ndmt1at21/devlog/backend/internal/platform/id"
@@ -34,11 +35,11 @@ func (a *API) coffeeCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !allowedCoffeeAmounts[in.Amount] {
-		writeError(w, http.StatusBadRequest, "Số tiền không hợp lệ.")
+		writeError(w, r, apierr.ErrCoffeeAmount)
 		return
 	}
 	if in.Method != "card" && in.Method != "momo" {
-		writeError(w, http.StatusBadRequest, "Phương thức thanh toán không hợp lệ.")
+		writeError(w, r, apierr.ErrCoffeeMethod)
 		return
 	}
 
@@ -61,7 +62,7 @@ func (a *API) coffeeCheckout(w http.ResponseWriter, r *http.Request) {
 	switch in.Method {
 	case "card":
 		if a.Stripe == nil {
-			writeJSON(w, http.StatusOK, map[string]any{"demo": true})
+			writeJSON(w, r, http.StatusOK, map[string]any{"demo": true})
 			return
 		}
 		base := strings.TrimRight(a.Cfg.AppBaseURL, "/")
@@ -78,19 +79,19 @@ func (a *API) coffeeCheckout(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			log.Printf("stripe checkout: %v", err)
-			writeError(w, http.StatusBadGateway, "Không khởi tạo được thanh toán thẻ.")
+			writeError(w, r, apierr.ErrCoffeeCheckoutCard)
 			return
 		}
 		order.StripeSessionID = sessionID
 		if _, err := a.Store.CoffeeOrders().Create(r.Context(), order); err != nil {
-			writeError(w, http.StatusInternalServerError, "Không tạo được đơn hàng.")
+			writeError(w, r, apierr.ErrCoffeeOrderCreate)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"orderId": order.ID, "redirectUrl": redirectURL})
+		writeJSON(w, r, http.StatusOK, map[string]any{"orderId": order.ID, "redirectUrl": redirectURL})
 
 	case "momo":
 		if a.Momo == nil {
-			writeJSON(w, http.StatusOK, map[string]any{"demo": true})
+			writeJSON(w, r, http.StatusOK, map[string]any{"demo": true})
 			return
 		}
 		requestID := id.NewV7()
@@ -101,20 +102,20 @@ func (a *API) coffeeCheckout(w http.ResponseWriter, r *http.Request) {
 			Amount:      order.Amount,
 			OrderInfo:   coffeeProductName,
 			RedirectURL: fmt.Sprintf("%s/coffee/result?provider=momo&order=%s", base, order.ID),
-			IpnURL:      strings.TrimRight(publicBackendURL(r), "/") + "/api/webhooks/momo",
+			IpnURL:      strings.TrimRight(publicBackendURL(r), "/") + apiV1 + "/webhooks/momo",
 		})
 		if err != nil {
 			log.Printf("momo create: %v", err)
-			writeError(w, http.StatusBadGateway, "Không khởi tạo được thanh toán MoMo.")
+			writeError(w, r, apierr.ErrCoffeeCheckoutMomo)
 			return
 		}
 		order.MomoOrderID = order.ID
 		order.MomoRequestID = requestID
 		if _, err := a.Store.CoffeeOrders().Create(r.Context(), order); err != nil {
-			writeError(w, http.StatusInternalServerError, "Không tạo được đơn hàng.")
+			writeError(w, r, apierr.ErrCoffeeOrderCreate)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{
+		writeJSON(w, r, http.StatusOK, map[string]any{
 			"orderId":   order.ID,
 			"qrCodeUrl": res.QRCodeURL,
 			"deeplink":  res.Deeplink,
@@ -131,11 +132,11 @@ func (a *API) coffeeStatus(w http.ResponseWriter, r *http.Request) {
 	oid := r.PathValue("id")
 	order, err := a.Store.CoffeeOrders().GetByID(r.Context(), oid)
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Không tìm thấy đơn hàng.")
+		writeError(w, r, apierr.ErrCoffeeOrderNotFound)
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Không tải được đơn hàng.")
+		writeError(w, r, apierr.ErrCoffeeLoad)
 		return
 	}
 
@@ -149,7 +150,7 @@ func (a *API) coffeeStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"status": order.Status,
 		"amount": order.Amount,
 		"method": order.Method,
@@ -195,13 +196,13 @@ func (a *API) stripeWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid body")
+		http.Error(w, "invalid body", http.StatusBadRequest)
 		return
 	}
 	eventType, orderID, err := a.Stripe.VerifyWebhook(body, r.Header.Get("Stripe-Signature"))
 	if err != nil {
 		log.Printf("stripe webhook: %v", err)
-		writeError(w, http.StatusBadRequest, "invalid signature")
+		http.Error(w, "invalid signature", http.StatusBadRequest)
 		return
 	}
 	if eventType == "checkout.session.completed" && orderID != "" {
@@ -220,13 +221,13 @@ func (a *API) momoWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid body")
+		http.Error(w, "invalid body", http.StatusBadRequest)
 		return
 	}
 	ipn, ok, err := a.Momo.VerifyIPN(body)
 	if err != nil || !ok {
 		log.Printf("momo webhook: invalid (err=%v ok=%v)", err, ok)
-		writeError(w, http.StatusBadRequest, "invalid signature")
+		http.Error(w, "invalid signature", http.StatusBadRequest)
 		return
 	}
 	status := domain.CoffeeFailed

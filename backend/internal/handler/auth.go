@@ -1,18 +1,31 @@
 package handler
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/ndmt1at21/devlog/backend/internal/apierr"
 	"github.com/ndmt1at21/devlog/backend/internal/authn"
 	"github.com/ndmt1at21/devlog/backend/internal/iam"
 	"github.com/ndmt1at21/devlog/backend/internal/session"
 )
 
 var emailRe = regexp.MustCompile(`^\S+@\S+\.\S+$`)
+
+// oauthStateCookie carries the CSRF state binding a federated-login start to its
+// callback. Short-lived, httpOnly, SameSite=Lax so it survives the top-level
+// redirect back from the IdP.
+const oauthStateCookie = "devnote_oauth_state"
+
+// googleCallbackPath is the blog redirect target IAM sends the auth code to. It
+// must be registered on the IAM client's allowed redirect URIs.
+const googleCallbackPath = "/api/v1/auth/google/callback"
 
 // withSession resolves the session cookie into a SessionUser on the request
 // context, refreshing the access token when expired.
@@ -64,7 +77,7 @@ func (a *API) userPremium(r *http.Request, sub string) bool {
 
 func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	if a.Auth == nil || a.Sessions == nil {
-		writeError(w, http.StatusServiceUnavailable, "Đăng nhập chưa được cấu hình.")
+		writeError(w, r, apierr.ErrAuthNotConfigured)
 		return
 	}
 	var in struct {
@@ -76,23 +89,23 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	}
 	email := strings.TrimSpace(in.Email)
 	if email == "" || in.Password == "" {
-		writeError(w, http.StatusBadRequest, "Vui lòng nhập email và mật khẩu.")
+		writeError(w, r, apierr.ErrValidation.WithMessage("Vui lòng nhập email và mật khẩu."))
 		return
 	}
 
 	ts, err := a.Auth.Login(r.Context(), email, in.Password)
 	if errors.Is(err, authn.ErrInvalidCredentials) {
-		writeError(w, http.StatusUnauthorized, "Email hoặc mật khẩu không đúng.")
+		writeError(w, r, apierr.ErrInvalidCredentials)
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "Không kết nối được dịch vụ xác thực.")
+		writeError(w, r, apierr.ErrAuthUpstream)
 		return
 	}
 
 	user, err := a.Auth.UserInfo(r.Context(), ts.AccessToken)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "Không lấy được thông tin người dùng.")
+		writeError(w, r, apierr.ErrUserInfo)
 		return
 	}
 	name := user.Name
@@ -108,15 +121,15 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		Email:   user.Email,
 	}
 	if err := a.Sessions.Save(w, data); err != nil {
-		writeError(w, http.StatusInternalServerError, "Không tạo được phiên đăng nhập.")
+		writeError(w, r, apierr.ErrSessionCreate)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "user": a.sessionUser(r, data)})
+	writeJSON(w, r, http.StatusOK, map[string]any{"authenticated": true, "user": a.sessionUser(r, data)})
 }
 
 func (a *API) register(w http.ResponseWriter, r *http.Request) {
 	if a.Auth == nil {
-		writeError(w, http.StatusServiceUnavailable, "Đăng ký chưa được cấu hình.")
+		writeError(w, r, apierr.ErrAuthNotConfigured.WithMessage("Đăng ký chưa được cấu hình."))
 		return
 	}
 	var in struct {
@@ -130,28 +143,28 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 	in.Name = strings.TrimSpace(in.Name)
 	in.Email = strings.TrimSpace(in.Email)
 	if in.Name == "" || in.Email == "" || in.Password == "" {
-		writeError(w, http.StatusBadRequest, "Vui lòng điền đầy đủ thông tin.")
+		writeError(w, r, apierr.ErrValidation.WithMessage("Vui lòng điền đầy đủ thông tin."))
 		return
 	}
 	if !emailRe.MatchString(in.Email) {
-		writeError(w, http.StatusBadRequest, "Email chưa hợp lệ.")
+		writeError(w, r, apierr.ErrInvalidEmail)
 		return
 	}
 	if len(in.Password) < 6 {
-		writeError(w, http.StatusBadRequest, "Mật khẩu cần tối thiểu 6 ký tự.")
+		writeError(w, r, apierr.ErrWeakPassword)
 		return
 	}
 
 	err := a.Auth.Register(r.Context(), in.Email, in.Password)
 	if iam.ErrConflict(err) {
-		writeError(w, http.StatusConflict, "Email này đã được đăng ký.")
+		writeError(w, r, apierr.ErrEmailTaken)
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "Không kết nối được dịch vụ xác thực.")
+		writeError(w, r, apierr.ErrAuthUpstream)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"status":  "verification_email_sent",
 		"message": "Đã gửi email xác thực. Vui lòng kiểm tra hộp thư để kích hoạt tài khoản.",
 	})
@@ -159,7 +172,7 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) forgotPassword(w http.ResponseWriter, r *http.Request) {
 	if a.Auth == nil {
-		writeError(w, http.StatusServiceUnavailable, "Tính năng chưa được cấu hình.")
+		writeError(w, r, apierr.ErrUnavailable)
 		return
 	}
 	var in struct {
@@ -170,12 +183,12 @@ func (a *API) forgotPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Email = strings.TrimSpace(in.Email)
 	if !emailRe.MatchString(in.Email) {
-		writeError(w, http.StatusBadRequest, "Email chưa hợp lệ.")
+		writeError(w, r, apierr.ErrInvalidEmail)
 		return
 	}
 	// Always report success (anti-enumeration), matching IAM's behavior.
 	_ = a.Auth.ForgotPassword(r.Context(), in.Email)
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (a *API) logout(w http.ResponseWriter, r *http.Request) {
@@ -185,16 +198,16 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 		}
 		a.Sessions.Clear(w)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (a *API) me(w http.ResponseWriter, r *http.Request) {
 	u, ok := userFrom(r.Context())
 	if !ok {
-		writeJSON(w, http.StatusOK, map[string]any{"authenticated": false})
+		writeJSON(w, r, http.StatusOK, map[string]any{"authenticated": false})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "user": u})
+	writeJSON(w, r, http.StatusOK, map[string]any{"authenticated": true, "user": u})
 }
 
 func emailLocal(email string) string {
@@ -205,4 +218,115 @@ func emailLocal(email string) string {
 		return "Bạn"
 	}
 	return email
+}
+
+// googleLogin starts "Đăng nhập với Google": it sets a CSRF-state cookie and
+// redirects the browser to IAM's federated-login URL, which runs the Google
+// flow and redirects back to googleCallback with an authorization code.
+func (a *API) googleLogin(w http.ResponseWriter, r *http.Request) {
+	if a.Auth == nil || a.Sessions == nil {
+		http.Redirect(w, r, a.frontendURL("/login", "auth_unavailable"), http.StatusFound)
+		return
+	}
+	state, err := randomState()
+	if err != nil {
+		http.Redirect(w, r, a.frontendURL("/login", "google_failed"), http.StatusFound)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     oauthStateCookie,
+		Value:    state,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   a.Cfg.CookieSecure,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   600,
+	})
+	http.Redirect(w, r, a.Auth.FederatedLoginURL("google", state, a.googleRedirectURI()), http.StatusFound)
+}
+
+// googleCallback is the redirect target for the federated flow. It verifies the
+// state cookie, exchanges the IAM authorization code for tokens, opens a session,
+// and sends the browser back to the app. On any failure it redirects to /login
+// with an error code the page surfaces inline.
+func (a *API) googleCallback(w http.ResponseWriter, r *http.Request) {
+	// Always clear the one-time state cookie.
+	http.SetCookie(w, &http.Cookie{
+		Name: oauthStateCookie, Value: "", Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: a.Cfg.CookieSecure, SameSite: http.SameSiteLaxMode,
+	})
+
+	if a.Auth == nil || a.Sessions == nil {
+		http.Redirect(w, r, a.frontendURL("/login", "auth_unavailable"), http.StatusFound)
+		return
+	}
+
+	q := r.URL.Query()
+	state, code := q.Get("state"), q.Get("code")
+	c, err := r.Cookie(oauthStateCookie)
+	if q.Get("error") != "" || err != nil || c.Value == "" || state == "" || code == "" || subtleMismatch(c.Value, state) {
+		http.Redirect(w, r, a.frontendURL("/login", "google_failed"), http.StatusFound)
+		return
+	}
+
+	ts, err := a.Auth.ExchangeCode(r.Context(), code, a.googleRedirectURI())
+	if err != nil {
+		http.Redirect(w, r, a.frontendURL("/login", "google_failed"), http.StatusFound)
+		return
+	}
+	user, err := a.Auth.UserInfo(r.Context(), ts.AccessToken)
+	if err != nil {
+		http.Redirect(w, r, a.frontendURL("/login", "google_failed"), http.StatusFound)
+		return
+	}
+	name := user.Name
+	if name == "" {
+		name = emailLocal(user.Email)
+	}
+	data := session.Data{
+		Access:  ts.AccessToken,
+		Refresh: ts.RefreshToken,
+		Exp:     time.Now().Add(time.Duration(ts.ExpiresIn) * time.Second).Unix(),
+		Sub:     user.Sub,
+		Name:    name,
+		Email:   user.Email,
+	}
+	if err := a.Sessions.Save(w, data); err != nil {
+		http.Redirect(w, r, a.frontendURL("/login", "google_failed"), http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, strings.TrimRight(a.Cfg.AppBaseURL, "/")+"/", http.StatusFound)
+}
+
+func (a *API) googleRedirectURI() string {
+	return strings.TrimRight(a.Cfg.AppBaseURL, "/") + googleCallbackPath
+}
+
+// frontendURL builds an app URL (optionally with an ?error= code) for redirects.
+func (a *API) frontendURL(path, errCode string) string {
+	base := strings.TrimRight(a.Cfg.AppBaseURL, "/") + path
+	if errCode != "" {
+		return base + "?error=" + url.QueryEscape(errCode)
+	}
+	return base
+}
+
+func randomState() (string, error) {
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+// subtleMismatch reports whether two non-empty strings differ, in constant time.
+func subtleMismatch(a, b string) bool {
+	if len(a) != len(b) {
+		return true
+	}
+	var diff byte
+	for i := 0; i < len(a); i++ {
+		diff |= a[i] ^ b[i]
+	}
+	return diff != 0
 }

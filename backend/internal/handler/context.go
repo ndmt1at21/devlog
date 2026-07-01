@@ -4,7 +4,20 @@ import "context"
 
 type ctxKey int
 
-const userCtxKey ctxKey = iota
+const (
+	userCtxKey ctxKey = iota
+	traceCtxKey
+)
+
+func withTraceID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, traceCtxKey, id)
+}
+
+// traceIDFrom returns the request's trace id, or "" if unset.
+func traceIDFrom(ctx context.Context) string {
+	id, _ := ctx.Value(traceCtxKey).(string)
+	return id
+}
 
 // SessionUser is the authenticated user attached to a request by the auth
 // middleware. It is nil for anonymous requests.
