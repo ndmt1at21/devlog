@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { fetchArticle, fetchComments } from "@/lib/server-api";
-import { highlightCode } from "@/lib/highlight";
+import { highlightCode } from "@/lib/shiki";
 import { ArticleView } from "@/components/article/ArticleView";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { SITE_NAME, absoluteUrl, organization } from "@/lib/seo";
