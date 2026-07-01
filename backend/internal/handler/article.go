@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/ndmt1at21/devlog/backend/internal/apierr"
 	"github.com/ndmt1at21/devlog/backend/internal/domain"
@@ -11,20 +12,24 @@ import (
 
 // articleSummary is the list/card projection of an article (no body).
 type articleSummary struct {
-	Slug          string   `json:"slug"`
-	Title         string   `json:"title"`
-	Excerpt       string   `json:"excerpt"`
-	Category      string   `json:"category"`
-	Author        string   `json:"author"`
-	AuthorInitial string   `json:"authorInitial"`
-	Read          string   `json:"read"`
-	Date          string   `json:"date"`
-	Tags          []string `json:"tags"`
-	Cover         string   `json:"cover,omitempty"`
-	Featured      bool     `json:"featured"`
-	IsSeries      bool     `json:"isSeries"`
-	Series        string   `json:"series,omitempty"`
-	SeriesBadge   string   `json:"seriesBadge,omitempty"`
+	Slug          string `json:"slug"`
+	Title         string `json:"title"`
+	Excerpt       string `json:"excerpt"`
+	Category      string `json:"category"`
+	Author        string `json:"author"`
+	AuthorInitial string `json:"authorInitial"`
+	Read          string `json:"read"`
+	Date          string `json:"date"`
+	// PublishedAt is the machine-readable (RFC 3339) counterpart of Date,
+	// consumed by the frontend for canonical SEO metadata, JSON-LD
+	// (datePublished) and the sitemap's lastmod.
+	PublishedAt time.Time `json:"publishedAt"`
+	Tags        []string  `json:"tags"`
+	Cover       string    `json:"cover,omitempty"`
+	Featured    bool      `json:"featured"`
+	IsSeries    bool      `json:"isSeries"`
+	Series      string    `json:"series,omitempty"`
+	SeriesBadge string    `json:"seriesBadge,omitempty"`
 }
 
 type seriesPartDTO struct {
@@ -58,7 +63,8 @@ func toSummary(a domain.Article) articleSummary {
 	s := articleSummary{
 		Slug: a.Slug, Title: a.Title, Excerpt: a.Excerpt, Category: a.Category,
 		Author: a.Author, AuthorInitial: initial(a.Author), Read: a.ReadTime,
-		Date: formatVNDate(a.PublishedAt), Tags: a.Tags, Cover: a.Cover, Featured: a.Featured,
+		Date: formatVNDate(a.PublishedAt), PublishedAt: a.PublishedAt,
+		Tags: a.Tags, Cover: a.Cover, Featured: a.Featured,
 	}
 	if a.Series != "" {
 		s.IsSeries = true
