@@ -13,6 +13,7 @@ import { TagList } from "./TagList";
 import { SeriesBox } from "./SeriesBox";
 import { Paywall } from "./Paywall";
 import { SeriesNav } from "./SeriesNav";
+import { ShareBar } from "./ShareBar";
 import { Comments } from "./Comments";
 import { ScrollDepthTracker } from "@/components/analytics/ScrollDepthTracker";
 
@@ -137,6 +138,12 @@ export function ArticleView({
       {detail.locked && (
         <Paywall slug={detail.slug} seriesSlug={detail.series} />
       )}
+
+      <ShareBar
+        slug={detail.slug}
+        title={detail.title}
+        excerpt={detail.excerpt}
+      />
 
       {detail.inSeries && (
         <SeriesNav

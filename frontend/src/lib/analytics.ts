@@ -33,6 +33,7 @@ export type AnalyticsEvent =
   | "copy_code"
   | "toggle_theme"
   | "series_nav"
+  | "share_article"
   | "paywall_view"
   | "paywall_upgrade_click"
   | "ad_impression"

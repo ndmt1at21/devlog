@@ -54,6 +54,15 @@ const vi: Dict = {
     cover: "ảnh bìa bài viết",
     prevPart: "← Phần trước",
     nextPart: "Phần tiếp theo →",
+    share: {
+      title: "Chia sẻ bài viết",
+      native: "Chia sẻ",
+      copy: "Sao chép liên kết",
+      copied: "Đã sao chép liên kết",
+      twitter: "Chia sẻ lên X",
+      facebook: "Chia sẻ lên Facebook",
+      linkedin: "Chia sẻ lên LinkedIn",
+    },
   },
   paywall: {
     title: "Nội dung dành cho thành viên Pro",
@@ -219,6 +228,15 @@ const en: Dict = {
     cover: "article cover",
     prevPart: "← Previous part",
     nextPart: "Next part →",
+    share: {
+      title: "Share this article",
+      native: "Share",
+      copy: "Copy link",
+      copied: "Link copied",
+      twitter: "Share on X",
+      facebook: "Share on Facebook",
+      linkedin: "Share on LinkedIn",
+    },
   },
   paywall: {
     title: "Pro members only",

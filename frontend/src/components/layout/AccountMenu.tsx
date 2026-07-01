@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { useI18n } from "@/lib/i18n/provider";
@@ -17,6 +17,31 @@ export function AccountMenu() {
   const { theme, toggle } = useTheme();
   const { locale, setLocale, t } = useI18n();
   const loggedIn = !!user;
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Close on click/tap outside the menu or on Escape. We use document listeners
+  // rather than a `fixed inset-0` overlay because the sticky header's
+  // backdrop-filter makes it the containing block for fixed descendants, so the
+  // overlay would only span the header bar and miss clicks on the page body.
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!wrapperRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
 
   const go = (path: string) => {
     setOpen(false);
@@ -27,12 +52,14 @@ export function AccountMenu() {
     "flex w-full items-center gap-[11px] rounded-[9px] px-3 py-[9px] text-left text-sm transition-colors hover:bg-hoverbg";
 
   return (
-    <div className="relative">
+    <div className="relative" ref={wrapperRef}>
       <button
+        ref={buttonRef}
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={t("header.account")}
+        title={t("header.account")}
         className="flex cursor-pointer items-center gap-1.5 rounded-full border border-border2 bg-surface py-[3px] pl-[3px] pr-[9px] text-strong transition-colors hover:border-hover"
       >
         {loggedIn ? (
@@ -53,17 +80,11 @@ export function AccountMenu() {
       </button>
 
       {open && (
-        <>
-          <div
-            className="fixed inset-0 z-[1]"
-            aria-hidden="true"
-            onClick={() => setOpen(false)}
-          />
-          <div
-            role="menu"
-            aria-label={t("header.account")}
-            className="absolute right-0 top-[calc(100%+10px)] z-[2] w-[230px] rounded-[14px] border border-border bg-surface p-1.5 shadow-[0_18px_50px_-18px_rgba(0,0,0,.35)] animate-fade-up"
-          >
+        <div
+          role="menu"
+          aria-label={t("header.account")}
+          className="absolute right-0 top-[calc(100%+10px)] z-[2] w-[230px] rounded-[14px] border border-border bg-surface p-1.5 shadow-[0_18px_50px_-18px_rgba(0,0,0,.35)] animate-fade-up"
+        >
             {loggedIn ? (
               <div className="mb-1.5 border-b border-border px-3 pb-[11px] pt-[9px]">
                 <div className="text-[14px] font-bold text-text">
@@ -189,8 +210,7 @@ export function AccountMenu() {
                 </button>
               </>
             )}
-          </div>
-        </>
+        </div>
       )}
     </div>
   );
