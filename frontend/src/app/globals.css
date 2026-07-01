@@ -1,0 +1,278 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens ported 1:1 from the ui-design mockup (:root / [data-theme=dark]).
+ * The raw variables switch at runtime with the data-theme attribute on <html>;
+ * @theme inline (below) maps the semantic ones to Tailwind utilities that emit
+ * var(...) references so the utilities re-resolve when the theme flips.
+ */
+:root {
+  --bg: #fbfbfa;
+  --surface: #fff;
+  --header-bg: rgba(251, 251, 250, 0.82);
+  --text: #18191b;
+  --text-body: #2b2e33;
+  --c3a: #3a3e44;
+  --c43: #43474d;
+  --c4b: #4b4f55;
+  --c5b: #5b5f66;
+  --c6c: #6c7077;
+  --c8a: #8a8e94;
+  --ca3: #a3a7ac;
+  --ca9: #a9a7a1;
+  --ca30: #a3a09a;
+  --cb5: #b5b3ad;
+  --cbd: #bdbab4;
+  --cc4: #c4c1bb;
+  --border: #ecebe7;
+  --border-2: #e3e1de;
+  --dcd: #dcdad5;
+  --cfc: #cfcdc8;
+  --f1: #f1f0ec;
+  --f0: #f0efeb;
+  --f6: #f6f7f6;
+  --faf: #faf9f7;
+  --f3: #f3f2ef;
+  --eee: #eeede9;
+  --d8: #d8d6d1;
+  --accent: #f5c700;
+  --accent-ink: #8a6d00;
+  --on-accent: #2c2300;
+  --pill-bg: #18191b;
+  --pill-text: #fff;
+  --danger: #d4534a;
+}
+
+[data-theme="dark"] {
+  --bg: #16181c;
+  --surface: #1e2127;
+  --header-bg: rgba(22, 24, 28, 0.82);
+  --text: #e9ebee;
+  --text-body: #c9cdd3;
+  --c3a: #b6bbc2;
+  --c43: #b3b8bf;
+  --c4b: #aab0b8;
+  --c5b: #9ca1a8;
+  --c6c: #969ba2;
+  --c8a: #7f848b;
+  --ca3: #6f747b;
+  --ca9: #6b7077;
+  --ca30: #6b7077;
+  --cb5: #5f646b;
+  --cbd: #5f646b;
+  --cc4: #4a4f57;
+  --border: #2c3038;
+  --border-2: #353a43;
+  --dcd: #434954;
+  --cfc: #434954;
+  --f1: #2a2e35;
+  --f0: #262a31;
+  --f6: #23262c;
+  --faf: #1e2127;
+  --f3: #23272e;
+  --eee: #2a2e36;
+  --d8: #353a43;
+  --accent-ink: #f0c93a;
+  --on-accent: #2c2300;
+  --pill-bg: #e9ebee;
+  --pill-text: #16181c;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-text: var(--text);
+  --color-body: var(--text-body);
+  --color-strong: var(--c43);
+  --color-c3a: var(--c3a);
+  --color-c4b: var(--c4b);
+  --color-c5b: var(--c5b);
+  --color-muted: var(--c6c);
+  --color-subtle: var(--c8a);
+  --color-faint: var(--ca3);
+  --color-mono: var(--ca9);
+  --color-border: var(--border);
+  --color-border2: var(--border-2);
+  --color-hover: var(--dcd);
+  --color-chip: var(--f0);
+  --color-hoverbg: var(--f1);
+  --color-soft: var(--f6);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-on-accent: var(--on-accent);
+  --color-danger: var(--danger);
+
+  --font-sans: var(--font-be-vietnam), -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  html {
+    background: var(--bg);
+    color: var(--text);
+  }
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.28s ease, color 0.28s ease;
+  }
+  ::selection {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+  button {
+    font-family: inherit;
+    transition: background-color 0.16s ease, border-color 0.16s ease,
+      box-shadow 0.22s ease, transform 0.16s ease, color 0.16s ease,
+      opacity 0.16s ease, filter 0.16s ease;
+  }
+  /* Every interactive button gets a pointer + a hover response, so none feel
+     dead. `filter` layers on top of any element-specific hover (bg/border/etc.)
+     and isn't overridden by inline styles. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+  button:disabled,
+  button[aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+  button:not(:disabled):hover,
+  .btn-accent:hover,
+  .btn-outline:hover {
+    filter: brightness(0.95);
+  }
+  [data-theme="dark"] button:not(:disabled):hover,
+  [data-theme="dark"] .btn-accent:hover,
+  [data-theme="dark"] .btn-outline:hover {
+    filter: brightness(1.15);
+  }
+  input,
+  textarea {
+    font-family: inherit;
+  }
+}
+
+@layer components {
+  /* Recurring accent-tinted category pill. */
+  .chip-accent {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 11%, transparent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+  /* Grey "Series · Phần N" badge. */
+  .chip-series {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    background: var(--f0);
+    color: var(--c6c);
+    font-weight: 600;
+  }
+  /* Round accent avatar/monogram. */
+  .avatar-accent {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--accent-ink);
+    font-weight: 700;
+  }
+  /* Primary yellow action button. */
+  .btn-accent {
+    background: var(--accent);
+    color: var(--on-accent);
+    border: none;
+    cursor: pointer;
+    font-weight: 700;
+    border-radius: 10px;
+    transition: background-color 0.18s ease, transform 0.16s ease;
+  }
+  .btn-accent:hover {
+    background: color-mix(in srgb, var(--accent) 86%, #000);
+  }
+  /* Neutral outlined button. */
+  .btn-outline {
+    background: var(--surface);
+    border: 1px solid var(--border-2);
+    color: var(--c43);
+    cursor: pointer;
+    font-weight: 600;
+    border-radius: 10px;
+    transition: border-color 0.18s ease;
+  }
+  .btn-outline:hover {
+    border-color: var(--cfc);
+  }
+  /* Surface card. */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+  }
+  /* Text/form field. */
+  .field {
+    width: 100%;
+    border: 1px solid var(--border-2);
+    border-radius: 10px;
+    outline: none;
+    background: var(--bg);
+    color: var(--text);
+    transition: border-color 0.16s ease, background-color 0.16s ease;
+  }
+  .field:focus {
+    border-color: var(--accent-ink);
+    background: var(--surface);
+  }
+  /* Cover-image placeholder hatch. */
+  .cover-hatch {
+    background: repeating-linear-gradient(
+      135deg,
+      var(--f3),
+      var(--f3) 11px,
+      var(--eee) 11px,
+      var(--eee) 22px
+    );
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.35s ease both;
+}
+
+/*
+ * Shiki output (server-rendered, injected via dangerouslySetInnerHTML so it's
+ * outside Tailwind's scan). Keep the design's dark container background and drop
+ * Shiki's own bg; the token colors from the theme still apply per-span.
+ */
+.code-shiki .shiki {
+  margin: 0;
+  padding: 16px 18px;
+  overflow-x: auto;
+  background-color: transparent !important;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.7;
+  white-space: pre;
+}
+.code-shiki .shiki code {
+  font-family: inherit;
+}

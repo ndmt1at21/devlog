@@ -1,0 +1,385 @@
+// UI translations (VI default + EN). Article *content* is not translated here —
+// it comes from the API in Vietnamese. Keys are dot-paths resolved by makeT.
+
+export type Locale = "vi" | "en";
+export const LOCALES: Locale[] = ["vi", "en"];
+export const DEFAULT_LOCALE: Locale = "vi";
+export const LOCALE_COOKIE = "locale";
+
+export const LOCALE_LABELS: Record<Locale, string> = {
+  vi: "Tiếng Việt",
+  en: "English",
+};
+
+type Dict = { [k: string]: string | Dict };
+
+const vi: Dict = {
+  common: {
+    back: "← Quay lại",
+    cancel: "Huỷ",
+    close: "Đóng",
+    or: "hoặc",
+    allCategories: "Tất cả",
+    home: "Về trang chủ",
+  },
+  header: {
+    searchPlaceholder: "Tìm bài viết, chủ đề…",
+    search: "Tìm kiếm",
+    coffee: "Mời tác giả cà phê",
+    account: "Tài khoản & cài đặt",
+    language: "Ngôn ngữ",
+  },
+  footer: {
+    tagline: "Blog công nghệ cho lập trình viên Việt",
+    copyright: "© 2026 devnote · Made with ☕ & code",
+  },
+  account: {
+    login: "Đăng nhập",
+    register: "Đăng ký miễn phí",
+    upgradePro: "Nâng cấp Pro",
+    memberPro: "Thành viên Pro",
+    lightMode: "Chế độ sáng",
+    darkMode: "Chế độ tối",
+    logout: "Đăng xuất",
+  },
+  home: {
+    featured: "Bài viết nổi bật",
+    resultsFor: "{count} kết quả cho “{term}”",
+    noResultsFor: "Không có kết quả cho “{term}”",
+    emptySearch: "Không tìm thấy bài viết nào.",
+    emptyCategory: "Chưa có bài viết trong danh mục này.",
+    cover: "ảnh bìa",
+  },
+  article: {
+    cover: "ảnh bìa bài viết",
+    prevPart: "← Phần trước",
+    nextPart: "Phần tiếp theo →",
+  },
+  paywall: {
+    title: "Nội dung dành cho thành viên Pro",
+    body: "Đăng ký devnote Pro để đọc trọn vẹn series này, gỡ toàn bộ quảng cáo và ủng hộ tác giả.",
+    cta: "Nâng cấp Pro",
+  },
+  comments: {
+    title: "Bình luận ({count})",
+    subtitle: "Bạn có thể bình luận chỉ với tên — không cần đăng nhập.",
+    namePlaceholder: "Tên của bạn",
+    textPlaceholder: "Chia sẻ suy nghĩ của bạn…",
+    submit: "Gửi bình luận",
+    submitting: "Đang gửi…",
+    empty: "Hãy là người đầu tiên bình luận.",
+    errName: "Vui lòng nhập tên của bạn.",
+    errText: "Bình luận không được để trống.",
+    errFailed: "Không gửi được bình luận.",
+  },
+  code: { copy: "Copy", copied: "Đã copy ✓" },
+  ad: {
+    label: "Quảng cáo",
+    area: "Khu vực quảng cáo · 728 × 90",
+    embed: "Slot có thể nhúng mã quảng cáo của bạn vào đây",
+    removePro: "Gỡ quảng cáo với Pro →",
+  },
+  pro: {
+    badge: "✦ devnote Pro",
+    heading: "Đọc không giới hạn, không quảng cáo",
+    sub: "Ủng hộ devnote và mở khoá toàn bộ trải nghiệm đọc.",
+    benefit1: "Gỡ toàn bộ quảng cáo",
+    benefit2: "Đọc trọn vẹn mọi series nhiều phần",
+    benefit3: "Ủng hộ tác giả viết tiếp",
+    subscribe: "Đăng ký Pro",
+    subscribing: "Đang kích hoạt…",
+    demo: "Bản demo — không phát sinh thanh toán thật.",
+    successTitle: "Bạn đã là thành viên Pro",
+    successBody:
+      "Quảng cáo đã được gỡ và toàn bộ series đã mở khoá. Cảm ơn bạn đã ủng hộ devnote ☕",
+    startReading: "Bắt đầu đọc",
+  },
+  coffee: {
+    title: "Mời tác giả ly cà phê ☕",
+    subtitle: "Một ly cà phê nhỏ giúp devnote ra thêm bài viết mới.",
+    namePlaceholder: "Tên của bạn (tuỳ chọn)",
+    continue: "Tiếp tục · {amount}",
+    pay: "Thanh toán",
+    qty: "{count} ly cà phê",
+    methodCard: "Thẻ quốc tế",
+    cardNumber: "Số thẻ",
+    expiry: "Hết hạn",
+    cvc: "CVC",
+    momoScan: "Quét mã bằng ứng dụng MoMo để hoàn tất.",
+    payAmount: "Thanh toán {amount}",
+    demo: "Bản demo · không phát sinh giao dịch thật.",
+    doneTitle: "Cảm ơn bạn rất nhiều!",
+    doneBody:
+      "Đã nhận {amount} — ly cà phê của bạn là động lực để devnote viết tiếp.",
+    errFailed: "Không thực hiện được thanh toán. Vui lòng thử lại.",
+  },
+  auth: {
+    email: "Email",
+    password: "Mật khẩu",
+    displayName: "Tên hiển thị",
+    googleLogin: "Đăng nhập với Google",
+    googleRegister: "Đăng ký với Google",
+    namePlaceholder: "Nguyễn Văn A",
+    emailPlaceholder: "ban@email.com",
+    regPassPlaceholder: "Tối thiểu 6 ký tự",
+    sentTitle: "Kiểm tra hộp thư của bạn",
+    login: {
+      title: "Chào mừng trở lại 👋",
+      sub: "Đăng nhập để tham gia thảo luận.",
+      forgot: "Quên mật khẩu?",
+      submit: "Đăng nhập",
+      submitting: "Đang đăng nhập…",
+      demoPrefix: "Tài khoản demo — Email:",
+      demoPass: "Mật khẩu:",
+      noAccount: "Chưa có tài khoản?",
+      signupNow: "Đăng ký ngay",
+      errEmailPass: "Vui lòng nhập email và mật khẩu.",
+      errFailed: "Đăng nhập thất bại.",
+    },
+    register: {
+      title: "Tạo tài khoản",
+      sub: "Tham gia cộng đồng dev của devnote.",
+      submit: "Đăng ký",
+      submitting: "Đang tạo…",
+      have: "Đã có tài khoản?",
+      login: "Đăng nhập",
+      errAllFields: "Vui lòng điền đầy đủ thông tin.",
+      errWeakPass: "Mật khẩu cần tối thiểu 6 ký tự.",
+      errFailed: "Đăng ký thất bại.",
+    },
+    forgot: {
+      title: "Quên mật khẩu?",
+      sub: "Nhập email của bạn, chúng tôi sẽ gửi liên kết đặt lại mật khẩu.",
+      submit: "Gửi liên kết đặt lại",
+      submitting: "Đang gửi…",
+      sentBody: "Đã gửi liên kết đặt lại tới {email}.",
+      back: "← Quay lại đăng nhập",
+      errEmail: "Email chưa hợp lệ.",
+      errFailed: "Không gửi được yêu cầu.",
+    },
+    err: {
+      authUnavailable: "Đăng nhập chưa được cấu hình.",
+      googleFailed: "Đăng nhập Google thất bại. Vui lòng thử lại.",
+    },
+  },
+  notFound: {
+    title: "Không tìm thấy trang",
+    body: "Trang bạn tìm không tồn tại hoặc đã được di chuyển.",
+  },
+  error: {
+    title: "Đã có lỗi xảy ra",
+    body: "Xin lỗi vì sự cố. Vui lòng thử lại.",
+    retry: "Thử lại",
+  },
+  coffeeResult: {
+    pendingTitle: "Đang xác nhận thanh toán…",
+    pendingSub: "Vui lòng đợi trong giây lát.",
+    completedTitle: "Cảm ơn bạn rất nhiều!",
+    completedSub: "Ly cà phê của bạn là động lực để devnote viết tiếp.",
+    failedTitle: "Thanh toán chưa hoàn tất",
+    failedSub: "Giao dịch đã bị huỷ hoặc thất bại.",
+  },
+  meta: {
+    titleDefault: "devnote — Blog công nghệ cho lập trình viên Việt",
+    description:
+      "devnote — blog coding tiếng Việt: AI, Frontend, Backend, DevOps, Bảo mật. Bài viết chất lượng, code mẫu, và series chuyên sâu.",
+  },
+};
+
+const en: Dict = {
+  common: {
+    back: "← Back",
+    cancel: "Cancel",
+    close: "Close",
+    or: "or",
+    allCategories: "All",
+    home: "Back to home",
+  },
+  header: {
+    searchPlaceholder: "Search articles, topics…",
+    search: "Search",
+    coffee: "Buy the author a coffee",
+    account: "Account & settings",
+    language: "Language",
+  },
+  footer: {
+    tagline: "A coding blog for Vietnamese developers",
+    copyright: "© 2026 devnote · Made with ☕ & code",
+  },
+  account: {
+    login: "Log in",
+    register: "Sign up free",
+    upgradePro: "Upgrade to Pro",
+    memberPro: "Pro member",
+    lightMode: "Light mode",
+    darkMode: "Dark mode",
+    logout: "Log out",
+  },
+  home: {
+    featured: "Featured",
+    resultsFor: "{count} results for “{term}”",
+    noResultsFor: "No results for “{term}”",
+    emptySearch: "No articles found.",
+    emptyCategory: "No articles in this category yet.",
+    cover: "cover",
+  },
+  article: {
+    cover: "article cover",
+    prevPart: "← Previous part",
+    nextPart: "Next part →",
+  },
+  paywall: {
+    title: "Pro members only",
+    body: "Subscribe to devnote Pro to read the full series, remove all ads, and support the author.",
+    cta: "Upgrade to Pro",
+  },
+  comments: {
+    title: "Comments ({count})",
+    subtitle: "You can comment with just a name — no login required.",
+    namePlaceholder: "Your name",
+    textPlaceholder: "Share your thoughts…",
+    submit: "Post comment",
+    submitting: "Posting…",
+    empty: "Be the first to comment.",
+    errName: "Please enter your name.",
+    errText: "Comment can’t be empty.",
+    errFailed: "Couldn’t post the comment.",
+  },
+  code: { copy: "Copy", copied: "Copied ✓" },
+  ad: {
+    label: "Ad",
+    area: "Ad space · 728 × 90",
+    embed: "You can embed your ad code in this slot",
+    removePro: "Remove ads with Pro →",
+  },
+  pro: {
+    badge: "✦ devnote Pro",
+    heading: "Unlimited reading, no ads",
+    sub: "Support devnote and unlock the full reading experience.",
+    benefit1: "Remove all ads",
+    benefit2: "Read every multi-part series in full",
+    benefit3: "Support the author to keep writing",
+    subscribe: "Subscribe to Pro",
+    subscribing: "Activating…",
+    demo: "Demo — no real payment is charged.",
+    successTitle: "You’re a Pro member",
+    successBody:
+      "Ads are removed and all series are unlocked. Thank you for supporting devnote ☕",
+    startReading: "Start reading",
+  },
+  coffee: {
+    title: "Buy the author a coffee ☕",
+    subtitle: "A small coffee helps devnote publish more articles.",
+    namePlaceholder: "Your name (optional)",
+    continue: "Continue · {amount}",
+    pay: "Payment",
+    qty: "{count} coffee",
+    methodCard: "Card",
+    cardNumber: "Card number",
+    expiry: "Expiry",
+    cvc: "CVC",
+    momoScan: "Scan with the MoMo app to complete.",
+    payAmount: "Pay {amount}",
+    demo: "Demo · no real transaction.",
+    doneTitle: "Thank you so much!",
+    doneBody: "Received {amount} — your coffee keeps devnote writing.",
+    errFailed: "Payment failed. Please try again.",
+  },
+  auth: {
+    email: "Email",
+    password: "Password",
+    displayName: "Display name",
+    googleLogin: "Continue with Google",
+    googleRegister: "Sign up with Google",
+    namePlaceholder: "John Doe",
+    emailPlaceholder: "you@email.com",
+    regPassPlaceholder: "At least 6 characters",
+    sentTitle: "Check your inbox",
+    login: {
+      title: "Welcome back 👋",
+      sub: "Log in to join the discussion.",
+      forgot: "Forgot password?",
+      submit: "Log in",
+      submitting: "Logging in…",
+      demoPrefix: "Demo account — Email:",
+      demoPass: "Password:",
+      noAccount: "No account yet?",
+      signupNow: "Sign up now",
+      errEmailPass: "Please enter email and password.",
+      errFailed: "Login failed.",
+    },
+    register: {
+      title: "Create account",
+      sub: "Join the devnote developer community.",
+      submit: "Sign up",
+      submitting: "Creating…",
+      have: "Already have an account?",
+      login: "Log in",
+      errAllFields: "Please fill in all fields.",
+      errWeakPass: "Password must be at least 6 characters.",
+      errFailed: "Sign up failed.",
+    },
+    forgot: {
+      title: "Forgot password?",
+      sub: "Enter your email and we’ll send a password reset link.",
+      submit: "Send reset link",
+      submitting: "Sending…",
+      sentBody: "A reset link has been sent to {email}.",
+      back: "← Back to log in",
+      errEmail: "Invalid email.",
+      errFailed: "Couldn’t send the request.",
+    },
+    err: {
+      authUnavailable: "Login is not configured.",
+      googleFailed: "Google login failed. Please try again.",
+    },
+  },
+  notFound: {
+    title: "Page not found",
+    body: "The page you’re looking for doesn’t exist or has moved.",
+  },
+  error: {
+    title: "Something went wrong",
+    body: "Sorry about that. Please try again.",
+    retry: "Try again",
+  },
+  coffeeResult: {
+    pendingTitle: "Confirming payment…",
+    pendingSub: "Please wait a moment.",
+    completedTitle: "Thank you so much!",
+    completedSub: "Your coffee keeps devnote writing.",
+    failedTitle: "Payment not completed",
+    failedSub: "The transaction was canceled or failed.",
+  },
+  meta: {
+    titleDefault: "devnote — A coding blog for Vietnamese developers",
+    description:
+      "devnote — a coding blog: AI, Frontend, Backend, DevOps, Security. Quality articles, code samples, and in-depth series.",
+  },
+};
+
+export const dictionaries: Record<Locale, Dict> = { vi, en };
+
+function lookup(dict: Dict, key: string): string | undefined {
+  const val = key.split(".").reduce<string | Dict | undefined>((o, k) => {
+    if (o && typeof o === "object") return o[k];
+    return undefined;
+  }, dict);
+  return typeof val === "string" ? val : undefined;
+}
+
+export type TFunc = (
+  key: string,
+  params?: Record<string, string | number>,
+) => string;
+
+/** Build a translator for a locale, falling back to VI then the raw key. */
+export function makeT(locale: Locale): TFunc {
+  return (key, params) => {
+    const raw = lookup(dictionaries[locale], key) ?? lookup(vi, key) ?? key;
+    if (!params) return raw;
+    return raw.replace(/\{(\w+)\}/g, (_, k: string) =>
+      params[k] != null ? String(params[k]) : `{${k}}`,
+    );
+  };
+}

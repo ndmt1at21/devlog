@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "devnote-frontend",
+  // OpenNext emits the Worker entry + static assets here (see `deploy` script).
+  "main": ".open-next/worker.js",
+  // nodejs_compat is required by OpenNext; keep compatibility_date >= 2024-09-23.
+  "compatibility_date": "2025-08-15",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".open-next/assets"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    // Public HTTPS origin of the Go backend. A Worker cannot reach localhost,
+    // so replace this before deploying. This value is used at RUNTIME by the
+    // SSR API client (src/lib/server-api.ts). NOTE: the /api/* rewrite in
+    // next.config.ts bakes BACKEND_INTERNAL_URL in at BUILD time, so also set
+    // the same value in the build environment (see .env.example).
+    "BACKEND_INTERNAL_URL": "https://REPLACE-WITH-YOUR-BACKEND.example.com"
+  }
+}
