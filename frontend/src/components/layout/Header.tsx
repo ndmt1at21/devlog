@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useSearch } from "@/lib/search";
 import { useCoffee } from "@/components/coffee/CoffeeModal";
+import { donateEnabled } from "@/lib/features";
 import { useT } from "@/lib/i18n/provider";
 import { AccountMenu } from "./AccountMenu";
 
@@ -60,19 +61,21 @@ export function Header() {
           >
             ⌕
           </button>
-          <button
-            onClick={openCoffee}
-            title={t("header.coffee")}
-            aria-label={t("header.coffee")}
-            className="flex h-[38px] w-[38px] items-center justify-center rounded-[9px] border border-border2 bg-surface transition-colors hover:border-hover"
-          >
-            <Image
-              src="/buy-me-coffee-icon.png"
-              alt=""
-              width={20}
-              height={20}
-            />
-          </button>
+          {donateEnabled && (
+            <button
+              onClick={openCoffee}
+              title={t("header.coffee")}
+              aria-label={t("header.coffee")}
+              className="flex h-[38px] w-[38px] items-center justify-center rounded-[9px] border border-border2 bg-surface transition-colors hover:border-hover"
+            >
+              <Image
+                src="/buy-me-coffee-icon.png"
+                alt=""
+                width={20}
+                height={20}
+              />
+            </button>
+          )}
           <AccountMenu />
         </div>
 

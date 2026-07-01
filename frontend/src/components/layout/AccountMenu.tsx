@@ -7,6 +7,7 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { useI18n } from "@/lib/i18n/provider";
 import { LOCALES, LOCALE_LABELS } from "@/lib/i18n/dictionaries";
 import { track } from "@/lib/analytics";
+import { proEnabled } from "@/lib/features";
 import { initial } from "@/lib/format";
 
 export function AccountMenu() {
@@ -92,32 +93,33 @@ export function AccountMenu() {
               </>
             )}
 
-            {premium ? (
-              <button
-                role="menuitem"
-                onClick={() => go("/pro")}
-                className={`${item} font-medium text-strong`}
-              >
-                <span
-                  aria-hidden="true"
-                  className="w-[18px] text-center text-[15px] text-accent-ink"
+            {proEnabled &&
+              (premium ? (
+                <button
+                  role="menuitem"
+                  onClick={() => go("/pro")}
+                  className={`${item} font-medium text-strong`}
                 >
-                  ✦
-                </span>
-                {t("account.memberPro")}
-              </button>
-            ) : (
-              <button
-                role="menuitem"
-                onClick={() => go("/pro")}
-                className={`${item} font-bold text-accent-ink`}
-              >
-                <span aria-hidden="true" className="w-[18px] text-center text-[15px]">
-                  ✦
-                </span>
-                {t("account.upgradePro")}
-              </button>
-            )}
+                  <span
+                    aria-hidden="true"
+                    className="w-[18px] text-center text-[15px] text-accent-ink"
+                  >
+                    ✦
+                  </span>
+                  {t("account.memberPro")}
+                </button>
+              ) : (
+                <button
+                  role="menuitem"
+                  onClick={() => go("/pro")}
+                  className={`${item} font-bold text-accent-ink`}
+                >
+                  <span aria-hidden="true" className="w-[18px] text-center text-[15px]">
+                    ✦
+                  </span>
+                  {t("account.upgradePro")}
+                </button>
+              ))}
 
             <button
               role="menuitem"

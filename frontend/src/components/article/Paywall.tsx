@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { track } from "@/lib/analytics";
+import { proEnabled } from "@/lib/features";
 import { useT } from "@/lib/i18n/provider";
 
 export function Paywall({
@@ -34,15 +35,17 @@ export function Paywall({
       <p className="mx-auto mb-5 max-w-[380px] text-[15px] leading-[1.6] text-c5b">
         {t("paywall.body")}
       </p>
-      <button
-        onClick={() => {
-          track("paywall_upgrade_click", { slug, series_slug: seriesSlug });
-          router.push("/pro");
-        }}
-        className="btn-accent px-[26px] py-3 text-[15px]"
-      >
-        {t("paywall.cta")}
-      </button>
+      {proEnabled && (
+        <button
+          onClick={() => {
+            track("paywall_upgrade_click", { slug, series_slug: seriesSlug });
+            router.push("/pro");
+          }}
+          className="btn-accent px-[26px] py-3 text-[15px]"
+        >
+          {t("paywall.cta")}
+        </button>
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import { track } from "@/lib/analytics";
 import { useImpression } from "@/hooks/useImpression";
 import { gamEnabled } from "@/lib/ads";
+import { proEnabled } from "@/lib/features";
 import { GamAdSlot } from "@/components/ads/GamAdSlot";
 import { useT } from "@/lib/i18n/provider";
 
@@ -48,15 +49,17 @@ export function AdSlot({ slot = "in-content" }: { slot?: string }) {
             </span>
           </>
         )}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            router.push("/pro");
-          }}
-          className="mt-0.5 cursor-pointer border-none bg-transparent text-[12.5px] font-semibold text-accent-ink underline hover:opacity-75"
-        >
-          {t("ad.removePro")}
-        </button>
+        {proEnabled && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push("/pro");
+            }}
+            className="mt-0.5 cursor-pointer border-none bg-transparent text-[12.5px] font-semibold text-accent-ink underline hover:opacity-75"
+          >
+            {t("ad.removePro")}
+          </button>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import type { ArticleSummary } from "@/lib/types";
 import { SITE_URL } from "@/lib/seo";
+import { proEnabled } from "@/lib/features";
 
 const INTERNAL = process.env.BACKEND_INTERNAL_URL ?? "http://localhost:8080";
 
@@ -31,12 +32,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: SITE_URL, lastModified: now, changeFrequency: "daily", priority: 1 },
-    {
-      url: `${SITE_URL}/pro`,
-      lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.5,
-    },
+    // /pro is only a live route when the PRO subscription is enabled.
+    ...(proEnabled
+      ? [
+          {
+            url: `${SITE_URL}/pro`,
+            lastModified: now,
+            changeFrequency: "monthly" as const,
+            priority: 0.5,
+          },
+        ]
+      : []),
   ];
 
   const articleRoutes: MetadataRoute.Sitemap = articles.map((a) => ({
