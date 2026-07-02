@@ -1,11 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useSearch } from "@/lib/search";
 import { track } from "@/lib/analytics";
 
 export function TagList({ tags }: { tags: string[] }) {
-  const { setQuery } = useSearch();
   const router = useRouter();
   if (!tags.length) return null;
 
@@ -16,8 +14,7 @@ export function TagList({ tags }: { tags: string[] }) {
           key={tag}
           onClick={() => {
             track("select_tag", { tag });
-            setQuery(tag);
-            router.push("/");
+            router.push(`/?q=${encodeURIComponent(tag)}`);
           }}
           className="cursor-pointer rounded-full px-3 py-[5px] text-[13px] font-semibold text-accent-ink transition-all"
           style={{

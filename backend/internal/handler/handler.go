@@ -40,6 +40,12 @@ func (a *API) NewRouter() http.Handler {
 	mux.HandleFunc("GET "+apiV1+"/articles/{slug}/comments", a.listComments)
 	mux.HandleFunc("POST "+apiV1+"/articles/{slug}/comments", a.createComment)
 
+	// Reactions: public like count + the signed-in user's like/bookmark toggles.
+	mux.HandleFunc("GET "+apiV1+"/articles/{slug}/reactions", a.getReactions)
+	mux.HandleFunc("PUT "+apiV1+"/articles/{slug}/reactions/{kind}", a.setReaction)
+	mux.HandleFunc("DELETE "+apiV1+"/articles/{slug}/reactions/{kind}", a.setReaction)
+	mux.HandleFunc("GET "+apiV1+"/me/bookmarks", a.myBookmarks)
+
 	// Auth (IAM BFF) + Pro
 	mux.HandleFunc("POST "+apiV1+"/auth/login", a.login)
 	mux.HandleFunc("POST "+apiV1+"/auth/register", a.register)

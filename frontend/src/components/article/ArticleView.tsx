@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import type { ArticleDetail, Block, Comment } from "@/lib/types";
+import type { ArticleDetail, Block, Comment, ReactionStatus } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
 import { useT } from "@/lib/i18n/provider";
 import { track } from "@/lib/analytics";
@@ -14,6 +14,7 @@ import { SeriesBox } from "./SeriesBox";
 import { Paywall } from "./Paywall";
 import { SeriesNav } from "./SeriesNav";
 import { ShareBar } from "./ShareBar";
+import { ReactionBar } from "./ReactionBar";
 import { Comments } from "./Comments";
 import { ScrollDepthTracker } from "@/components/analytics/ScrollDepthTracker";
 
@@ -27,7 +28,7 @@ function renderBlock(block: Block, i: number, slug: string) {
       return (
         <h2
           key={i}
-          className="mb-2.5 mt-11 text-[25px] font-bold leading-[1.3] tracking-[-.02em] text-text"
+          className="mb-2.5 mt-11 text-[25px] font-bold leading-[1.3] tracking-[-.02em] text-balance text-text"
         >
           {block.text}
         </h2>
@@ -36,7 +37,7 @@ function renderBlock(block: Block, i: number, slug: string) {
       return (
         <blockquote
           key={i}
-          className="my-[30px] border-l-[3px] border-accent py-1.5 pl-[22px] text-[20px] font-medium leading-[1.6] text-c3a"
+          className="my-[30px] border-l-[3px] border-accent py-1.5 pl-[22px] text-[20px] font-medium leading-[1.6] text-pretty text-c3a"
         >
           {block.text}
         </blockquote>
@@ -57,8 +58,11 @@ function renderBlock(block: Block, i: number, slug: string) {
       );
     case "p":
     default:
+      // Justified from sm: up only — on narrow phones (~7 syllables/line)
+      // justify gaps get too wide without Vietnamese hyphenation, so mobile
+      // stays left-aligned. The last line stays left (browser default).
       return (
-        <p key={i} className="mb-[22px]">
+        <p key={i} className="mb-[22px] text-pretty sm:text-justify">
           {block.text}
         </p>
       );
@@ -68,9 +72,11 @@ function renderBlock(block: Block, i: number, slug: string) {
 export function ArticleView({
   detail,
   initialComments,
+  initialReactions,
 }: {
   detail: ArticleDetail;
   initialComments: Comment[];
+  initialReactions: ReactionStatus;
 }) {
   const { premium } = useAuth();
   const t = useT();
@@ -126,7 +132,9 @@ export function ArticleView({
         </span>
       </div>
 
-      <div className="text-[19px] leading-[1.85] text-body">
+      {/* break-words (inherited) keeps long URLs/identifiers from overflowing
+          the measure on small screens; pre/code are unaffected (nowrap). */}
+      <div className="break-words text-[19px] leading-[1.85] text-body">
         {detail.body.map((block, i) => (
           <div key={i}>
             {renderBlock(block, i, detail.slug)}
@@ -139,11 +147,15 @@ export function ArticleView({
         <Paywall slug={detail.slug} seriesSlug={detail.series} />
       )}
 
-      <ShareBar
-        slug={detail.slug}
-        title={detail.title}
-        excerpt={detail.excerpt}
-      />
+      {/* Action bar: like/save on the left, share cluster on the right. */}
+      <div className="mt-12 flex flex-wrap items-center justify-between gap-x-6 gap-y-4 border-t border-border pt-7">
+        <ReactionBar slug={detail.slug} initial={initialReactions} />
+        <ShareBar
+          slug={detail.slug}
+          title={detail.title}
+          excerpt={detail.excerpt}
+        />
+      </div>
 
       {detail.inSeries && (
         <SeriesNav

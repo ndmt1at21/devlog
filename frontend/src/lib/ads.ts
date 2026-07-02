@@ -8,11 +8,11 @@ export const gamEnabled = GAM_NETWORK_CODE !== "";
 // Logical slot name → GAM ad-unit name (configure these units in your GAM
 // network). The full ad-unit path is `/{networkCode}/{unitName}`.
 const AD_UNIT_NAMES: Record<string, string> = {
-  "in-content": process.env.NEXT_PUBLIC_GAM_AD_UNIT ?? "devnote_in_content",
+  "in-content": process.env.NEXT_PUBLIC_GAM_AD_UNIT ?? "jamti_in_content",
 };
 
 export function adUnitPath(slot: string): string {
-  const name = AD_UNIT_NAMES[slot] ?? `devnote_${slot.replace(/-/g, "_")}`;
+  const name = AD_UNIT_NAMES[slot] ?? `jamti_${slot.replace(/-/g, "_")}`;
   return `/${GAM_NETWORK_CODE}/${name}`;
 }
 

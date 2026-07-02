@@ -197,12 +197,7 @@ export function ShareBar({
     "inline-flex h-10 w-10 items-center justify-center rounded-full border border-border text-c3a transition-colors hover:border-accent-ink hover:text-accent-ink";
 
   return (
-    <div className="mt-12 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-border pt-7">
-      <span className="text-[14.5px] font-semibold text-c3a">
-        {t("article.share.title")}
-      </span>
-
-      <div className="flex flex-wrap items-center gap-2.5">
+    <div className="flex flex-wrap items-center gap-2.5">
         {canNativeShare && (
           <button
             type="button"
@@ -248,7 +243,6 @@ export function ShareBar({
             <span key={announceKey}>{t("article.share.copied")}</span>
           ) : null}
         </span>
-      </div>
     </div>
   );
 }

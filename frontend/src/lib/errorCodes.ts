@@ -39,6 +39,10 @@ const vi: Record<number, string> = {
   6004: "Không tạo được đơn hàng.",
   6005: "Không tìm thấy đơn hàng.",
   6006: "Không tải được đơn hàng.",
+  7000: "Không tải được lượt thích.",
+  7001: "Không cập nhật được tương tác.",
+  7002: "Loại tương tác không hợp lệ.",
+  7003: "Không tải được bài viết đã lưu.",
 };
 
 const en: Record<number, string> = {
@@ -75,6 +79,10 @@ const en: Record<number, string> = {
   6004: "Couldn’t create the order.",
   6005: "Order not found.",
   6006: "Couldn’t load the order.",
+  7000: "Couldn’t load likes.",
+  7001: "Couldn’t update the reaction.",
+  7002: "Invalid reaction kind.",
+  7003: "Couldn’t load saved articles.",
 };
 
 const MESSAGES: Record<Locale, Record<number, string>> = { vi, en };

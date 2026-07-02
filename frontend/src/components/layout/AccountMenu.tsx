@@ -86,14 +86,29 @@ export function AccountMenu() {
           className="absolute right-0 top-[calc(100%+10px)] z-[2] w-[230px] rounded-[14px] border border-border bg-surface p-1.5 shadow-[0_18px_50px_-18px_rgba(0,0,0,.35)] animate-fade-up"
         >
             {loggedIn ? (
-              <div className="mb-1.5 border-b border-border px-3 pb-[11px] pt-[9px]">
-                <div className="text-[14px] font-bold text-text">
-                  {user.name}
+              <>
+                <div className="mb-1.5 border-b border-border px-3 pb-[11px] pt-[9px]">
+                  <div className="text-[14px] font-bold text-text">
+                    {user.name}
+                  </div>
+                  <div className="mt-0.5 truncate text-[12.5px] text-faint">
+                    {user.email}
+                  </div>
                 </div>
-                <div className="mt-0.5 truncate text-[12.5px] text-faint">
-                  {user.email}
-                </div>
-              </div>
+                <button
+                  role="menuitem"
+                  onClick={() => go("/bookmarks")}
+                  className={`${item} font-medium text-strong`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="w-[18px] text-center text-[15px]"
+                  >
+                    🔖
+                  </span>
+                  {t("account.saved")}
+                </button>
+              </>
             ) : (
               <>
                 <button

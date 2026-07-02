@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { fetchArticle, fetchComments } from "@/lib/server-api";
+import { fetchArticle, fetchComments, fetchReactions } from "@/lib/server-api";
 import { highlightCode } from "@/lib/shiki";
 import { ArticleView } from "@/components/article/ArticleView";
 import { JsonLd } from "@/components/seo/JsonLd";
@@ -54,7 +54,10 @@ export default async function ArticlePage({ params }: Params) {
     }),
   );
 
-  const comments = detail.locked ? [] : await fetchComments(slug);
+  const [comments, reactions] = await Promise.all([
+    detail.locked ? Promise.resolve([]) : fetchComments(slug),
+    fetchReactions(slug),
+  ]);
 
   const articleUrl = absoluteUrl(`/articles/${slug}`);
   const blogPosting = {
@@ -95,7 +98,11 @@ export default async function ArticlePage({ params }: Params) {
     <>
       <JsonLd data={blogPosting} />
       <JsonLd data={breadcrumbs} />
-      <ArticleView detail={detail} initialComments={comments} />
+      <ArticleView
+        detail={detail}
+        initialComments={comments}
+        initialReactions={reactions}
+      />
     </>
   );
 }

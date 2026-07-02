@@ -57,6 +57,7 @@ func New(ctx context.Context, dsn string) (*Store, error) {
 func (s *Store) Articles() domain.ArticleRepository           { return &articleRepo{s.db} }
 func (s *Store) Series() domain.SeriesRepository              { return &seriesRepo{s.db} }
 func (s *Store) Comments() domain.CommentRepository           { return &commentRepo{s.db} }
+func (s *Store) Reactions() domain.ReactionRepository         { return &reactionRepo{s.db} }
 func (s *Store) Subscriptions() domain.SubscriptionRepository { return &subRepo{s.db} }
 func (s *Store) CoffeeOrders() domain.CoffeeOrderRepository   { return &coffeeRepo{s.db} }
 func (s *Store) Ping(ctx context.Context) error               { return s.db.PingContext(ctx) }

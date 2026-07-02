@@ -33,7 +33,7 @@ func def(code, status int, msg string) *Error {
 const CodeOK = 0
 
 // Registry. Codes are grouped by domain and MUST remain stable:
-//   1xxx generic · 2xxx auth · 3xxx content · 4xxx comments · 5xxx pro · 6xxx coffee
+//   1xxx generic · 2xxx auth · 3xxx content · 4xxx comments · 5xxx pro · 6xxx coffee · 7xxx reactions
 var (
 	// --- generic (1xxx) ---
 	ErrBadRequest   = def(1000, http.StatusBadRequest, "Dữ liệu gửi lên không hợp lệ.")
@@ -79,4 +79,10 @@ var (
 	ErrCoffeeOrderCreate  = def(6004, http.StatusInternalServerError, "Không tạo được đơn hàng.")
 	ErrCoffeeOrderNotFound = def(6005, http.StatusNotFound, "Không tìm thấy đơn hàng.")
 	ErrCoffeeLoad         = def(6006, http.StatusInternalServerError, "Không tải được đơn hàng.")
+
+	// --- reactions: likes & bookmarks (7xxx) ---
+	ErrReactionLoad   = def(7000, http.StatusInternalServerError, "Không tải được lượt thích.")
+	ErrReactionUpdate = def(7001, http.StatusInternalServerError, "Không cập nhật được tương tác.")
+	ErrReactionKind   = def(7002, http.StatusBadRequest, "Loại tương tác không hợp lệ.")
+	ErrBookmarkList   = def(7003, http.StatusInternalServerError, "Không tải được bài viết đã lưu.")
 )

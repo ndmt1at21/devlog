@@ -63,6 +63,12 @@ export interface Comment {
   initial: string;
 }
 
+export interface ReactionStatus {
+  likes: number;
+  liked: boolean;
+  bookmarked: boolean;
+}
+
 export interface Plan {
   key: "month" | "year";
   name: string;
