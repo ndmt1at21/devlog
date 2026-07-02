@@ -1,0 +1,34 @@
+# Production stack for the devlog backend (single service).
+#
+# The database is EXTERNAL / managed — this compose file does NOT run MySQL.
+# Point DB_DSN (in backend.env) at your existing MySQL server. Schema migrations
+# are embedded in the binary and applied automatically on startup.
+#
+# The Deploy workflow drives this file automatically:
+#   TAG=sha-xxxxxxx HOST_PORT=8080 docker compose -f docker-compose.prod.yml pull
+#   TAG=sha-xxxxxxx HOST_PORT=8080 docker compose -f docker-compose.prod.yml up -d
+#
+# For a manual restart on the VPS, `docker compose up -d` falls back to :latest.
+name: devlog-backend
+
+services:
+  backend:
+    image: ghcr.io/ndmt1at21/devlog-backend:${TAG:-latest}
+    restart: unless-stopped
+    # Non-DB runtime config + secrets (SESSION_SECRET, APP_BASE_URL, ...).
+    # Created once on the VPS from backend.env.example — never committed.
+    env_file:
+      - backend.env
+    environment:
+      # The DB DSN (which contains the DB password) is injected from the GitHub
+      # Actions `DB_DSN` secret at deploy time and never written to a file on the
+      # VPS. `environment` takes precedence over `env_file`. The `:?` guard makes
+      # a manual `docker compose up` fail fast if DB_DSN isn't exported.
+      DB_DSN: "${DB_DSN:?DB_DSN must be provided by the deploy environment (GitHub secret)}"
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
