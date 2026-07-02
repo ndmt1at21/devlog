@@ -36,8 +36,14 @@ Add these under **Settings → Secrets and variables → Actions → New reposit
 `DB_DSN` format (store the whole string as the secret value):
 
 ```
-devlog:PASSWORD@tcp(your-db-host:3306)/devlog?parseTime=true&loc=UTC&multiStatements=true
+devlog:PASSWORD@tcp(your-db-host:3306)/devlog?parseTime=true&loc=UTC
 ```
+
+`parseTime=true` & `loc=UTC` are required; add `tls=true` for managed DBs that
+enforce TLS. The password is used literally (do **not** URL-encode); only `/`
+breaks the DSN, so avoid it in the password. If MySQL runs on the same VPS, use
+the host's LAN IP (or `host.docker.internal` with an `extra_hosts` entry) — not
+`127.0.0.1`, which points at the container.
 
 It's injected straight into the container at deploy time and **never written to a
 file on the VPS**. No registry credentials are needed — the workflow authenticates
