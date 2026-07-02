@@ -15,7 +15,7 @@ type TokenSet struct {
 	ExpiresIn    int // seconds until the access token expires
 }
 
-// User is the resolved identity behind an access token.
+// User is the resolved  identity behind an access token.
 type User struct {
 	Sub   string
 	Name  string
