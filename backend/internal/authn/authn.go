@@ -7,7 +7,7 @@ import (
 	"errors"
 )
 
-// TokenSet is the result of a successful token exchange.
+// TokenSet is the result of a successful token exchange
 type TokenSet struct {
 	AccessToken  string
 	RefreshToken string
