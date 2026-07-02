@@ -15,16 +15,10 @@ services:
   backend:
     image: ghcr.io/ndmt1at21/devlog-backend:${TAG:-latest}
     restart: unless-stopped
-    # Non-DB runtime config + secrets (SESSION_SECRET, APP_BASE_URL, ...).
+    # Runtime config + secrets, incl. DB_DSN (SESSION_SECRET, APP_BASE_URL, ...).
     # Created once on the VPS from backend.env.example — never committed.
     env_file:
       - backend.env
-    environment:
-      # The DB DSN (which contains the DB password) is injected from the GitHub
-      # Actions `DB_DSN` secret at deploy time and never written to a file on the
-      # VPS. `environment` takes precedence over `env_file`. The `:?` guard makes
-      # a manual `docker compose up` fail fast if DB_DSN isn't exported.
-      DB_DSN: "${DB_DSN:?DB_DSN must be provided by the deploy environment (GitHub secret)}"
     ports:
       - "${HOST_PORT:-8080}:8080"
     logging:

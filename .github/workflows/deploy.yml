@@ -86,7 +86,7 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     # These are Environment secrets under the `PROD` environment, so the job must
-    # opt into it — otherwise VPS_HOST/DB_DSN/... resolve to empty.
+    # opt into it — otherwise VPS_HOST/VPS_SSH_KEY/... resolve to empty.
     environment: PROD
     steps:
       - uses: actions/checkout@v4
@@ -110,13 +110,12 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           HOST_PORT: ${{ secrets.HOST_PORT || '8080' }}
-          DB_DSN: ${{ secrets.DB_DSN }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          envs: TAG,GHCR_USER,GHCR_TOKEN,DEPLOY_PATH,HOST_PORT,DB_DSN
+          envs: TAG,GHCR_USER,GHCR_TOKEN,DEPLOY_PATH,HOST_PORT
           script_stop: true
           script: |
             set -euo pipefail
@@ -126,9 +125,9 @@ jobs:
             # freshly-built image, and roll it out. TAG/HOST_PORT are read by the
             # compose file via variable interpolation.
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-            # TAG/HOST_PORT are read by compose interpolation; DB_DSN is injected
-            # into the container (see docker-compose.prod.yml) — never persisted.
-            export TAG HOST_PORT DB_DSN
+            # TAG/HOST_PORT are read by compose interpolation. DB_DSN lives in
+            # backend.env on the VPS (env_file), not injected from a secret.
+            export TAG HOST_PORT
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             docker logout ghcr.io

@@ -14,8 +14,9 @@ Pull requests and feature branches run the **CI** workflow (build + vet + test)
 only; nothing is deployed until it lands on `main`.
 
 The database is **external / managed MySQL** — the deploy runs only the backend
-container and connects to your existing MySQL via `DB_DSN`. Schema migrations are
-embedded in the binary and applied automatically on startup.
+container and connects to your existing MySQL via `DB_DSN` (set in `backend.env`
+on the VPS). Schema migrations are embedded in the binary and applied
+automatically on startup.
 
 ---
 
@@ -30,10 +31,10 @@ Add these under **Settings → Secrets and variables → Actions → New reposit
 | `VPS_SSH_KEY`   | ✅       | **Private** SSH key (full PEM) whose public half is on the VPS.         |
 | `VPS_PORT`      | ➖       | SSH port. Defaults to `22`.                                             |
 | `DEPLOY_PATH`   | ✅       | Deploy directory on the VPS, e.g. `/opt/devlog-backend`.                |
-| `DB_DSN`        | ✅       | Full MySQL DSN **including the password** (see format below).           |
 | `HOST_PORT`     | ➖       | Host port the container publishes. Defaults to `8080`.                  |
 
-`DB_DSN` format (store the whole string as the secret value):
+The `DB_DSN` (with the DB password) is **not** a GitHub secret — it lives in
+`backend.env` on the VPS alongside the other secrets. See the format below.
 
 ```
 devlog:PASSWORD@tcp(your-db-host:3306)/devlog?parseTime=true&loc=UTC
@@ -45,13 +46,12 @@ breaks the DSN, so avoid it in the password. If MySQL runs on the same VPS, use
 the host's LAN IP (or `host.docker.internal` with an `extra_hosts` entry) — not
 `127.0.0.1`, which points at the container.
 
-It's injected straight into the container at deploy time and **never written to a
-file on the VPS**. No registry credentials are needed — the workflow authenticates
-to GHCR with the built-in `GITHUB_TOKEN` and passes it over SSH so the VPS can pull
-the (private) image during the deploy.
+No registry credentials are needed — the workflow authenticates to GHCR with the
+built-in `GITHUB_TOKEN` and passes it over SSH so the VPS can pull the (private)
+image during the deploy.
 
-> Other non-DB secrets (`SESSION_SECRET`, Stripe/MoMo keys) still live in
-> `backend.env` on the VPS. They can be moved to GitHub secrets the same way —
+> All backend secrets (`DB_DSN`, `SESSION_SECRET`, Stripe/MoMo keys) live in
+> `backend.env` on the VPS. They can be moved to GitHub secrets if you prefer —
 > ask if you want that.
 
 ---
@@ -70,8 +70,7 @@ sudo mkdir -p /opt/devlog-backend
 sudo chown "$USER":"$USER" /opt/devlog-backend
 cd /opt/devlog-backend
 
-# 3. Runtime env — fill in SESSION_SECRET, APP_BASE_URL, etc.
-#    DB_DSN is NOT put here — it comes from the GitHub `DB_DSN` secret at deploy time.
+# 3. Runtime env — fill in DB_DSN, SESSION_SECRET, APP_BASE_URL, etc.
 #    Grab the template from the repo, or scp it up:
 #    curl -fsSL https://raw.githubusercontent.com/ndmt1at21/devlog/main/deployments/backend.env.example -o backend.env
 nano backend.env
@@ -114,8 +113,7 @@ Redeploy a previous image by its short SHA tag on the VPS:
 cd /opt/devlog-backend
 # log in first if the image isn't cached locally (GHCR package is private):
 #   echo <GHCR_PAT_with_read:packages> | docker login ghcr.io -u <github-user> --password-stdin
-# DB_DSN must be exported for any manual run (compose fails fast without it):
-export DB_DSN='devlog:PASSWORD@tcp(your-db-host:3306)/devlog?parseTime=true&loc=UTC&multiStatements=true'
+# DB_DSN is read from backend.env, so no need to export it for a manual run:
 TAG=sha-abc1234 docker compose -f docker-compose.prod.yml up -d
 ```
 
