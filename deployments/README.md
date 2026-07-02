@@ -13,10 +13,11 @@ push to main ─▶ [Deploy workflow]
 Pull requests and feature branches run the **CI** workflow (build + vet + test)
 only; nothing is deployed until it lands on `main`.
 
-The database is **external / managed MySQL** — the deploy runs only the backend
-container and connects to your existing MySQL via `DB_DSN` (set in `backend.env`
-on the VPS). Schema migrations are embedded in the binary and applied
-automatically on startup.
+The deploy runs only the backend container and connects to MySQL via `DB_DSN`
+(in `backend.env`). The DB can be **anything reachable from the VPS** — a MySQL
+container, native MySQL on the host, or an external/managed server — so only the
+DSN host changes (see below). Schema migrations are embedded in the binary and
+applied automatically on startup.
 
 ---
 
@@ -37,14 +38,18 @@ The `DB_DSN` (with the DB password) is **not** a GitHub secret — it lives in
 `backend.env` on the VPS alongside the other secrets. See the format below.
 
 ```
-devlog:PASSWORD@tcp(your-db-host:3306)/devlog?parseTime=true&loc=UTC
+devlog:PASSWORD@tcp(HOST:3306)/devlog?parseTime=true&loc=UTC
 ```
 
-`parseTime=true` & `loc=UTC` are required; add `tls=true` for managed DBs that
-enforce TLS. The password is used literally (do **not** URL-encode); only `/`
-breaks the DSN, so avoid it in the password. If MySQL runs on the same VPS, use
-the host's LAN IP (or `host.docker.internal` with an `extra_hosts` entry) — not
-`127.0.0.1`, which points at the container.
+`parseTime=true` & `loc=UTC` are required; add `tls=true` if MySQL enforces TLS.
+The password is used literally (do **not** URL-encode); only `/` breaks the DSN,
+so avoid it in the password. `HOST` depends on where MySQL lives — the backend
+runs in a container, so **never** `127.0.0.1`:
+
+- **MySQL on this VPS** (a container publishing 3306, or native on the host):
+  use `host.docker.internal` — the compose file maps it to the host via an
+  `extra_hosts: host-gateway` entry, so no shared network is needed.
+- **External / managed MySQL:** use its real hostname or IP.
 
 No registry credentials are needed — the workflow authenticates to GHCR with the
 built-in `GITHUB_TOKEN` and passes it over SSH so the VPS can pull the (private)
@@ -70,7 +75,7 @@ sudo mkdir -p /opt/devlog-backend
 sudo chown "$USER":"$USER" /opt/devlog-backend
 cd /opt/devlog-backend
 
-# 3. Runtime env — fill in DB_DSN, SESSION_SECRET, APP_BASE_URL, etc.
+# 3. Runtime env — fill in DB_DSN (see the DSN host guidance above), SESSION_SECRET, etc.
 #    Grab the template from the repo, or scp it up:
 #    curl -fsSL https://raw.githubusercontent.com/ndmt1at21/devlog/main/deployments/backend.env.example -o backend.env
 nano backend.env
@@ -89,8 +94,8 @@ ssh-copy-id -i devlog_deploy.pub "$VPS_USER@$VPS_HOST"
 # Put the PRIVATE key (devlog_deploy) into the VPS_SSH_KEY secret.
 ```
 
-Make sure the VPS can reach your MySQL server and that a `devlog` database + user
-exist (the app creates the tables itself).
+Make sure the backend can reach MySQL at the `DB_DSN` host and that a `devlog`
+database + user exist (the app creates the tables itself).
 
 ---
 

@@ -1,8 +1,11 @@
 # Production stack for the devlog backend (single service).
 #
-# The database is EXTERNAL / managed — this compose file does NOT run MySQL.
-# Point DB_DSN (in backend.env) at your existing MySQL server. Schema migrations
-# are embedded in the binary and applied automatically on startup.
+# This file does NOT run MySQL — the DB can be anything reachable from the VPS:
+# a MySQL container, native MySQL on the host, or an external/managed server.
+# Point DB_DSN (in backend.env) at it. For a DB living on this VPS, use the host
+# `host.docker.internal` (resolved via the extra_hosts entry below); for an
+# external DB, use its real hostname/IP. See backend.env.example.
+# Schema migrations are embedded in the binary and applied automatically on startup.
 #
 # The Deploy workflow drives this file automatically:
 #   TAG=sha-xxxxxxx HOST_PORT=8080 docker compose -f docker-compose.prod.yml pull
@@ -19,6 +22,12 @@ services:
     # Created once on the VPS from backend.env.example — never committed.
     env_file:
       - backend.env
+    # Lets the container reach services on the VPS host (e.g. a DB bound to the
+    # host or a MySQL container publishing 3306) via the hostname
+    # `host.docker.internal` in DB_DSN. Harmless when DB_DSN points at an
+    # external host instead. `host-gateway` resolves to the host on Linux.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${HOST_PORT:-8080}:8080"
     logging:
