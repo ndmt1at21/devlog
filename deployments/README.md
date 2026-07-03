@@ -25,18 +25,41 @@ applied automatically on startup.
 
 Add these under **Settings → Secrets and variables → Actions → New repository secret**:
 
-| Secret             | Required | Description                                                          |
-| ------------------ | -------- | -------------------------------------------------------------------- |
-| `VPS_HOST`         | ✅       | VPS IP or hostname.                                                   |
-| `VPS_USER`         | ✅       | SSH user with permission to run `docker` (e.g. `deploy`).            |
-| `VPS_SSH_KEY`      | ✅       | **Private** SSH key (full PEM) whose public half is on the VPS.      |
-| `VPS_PORT`         | ➖       | SSH port. Defaults to `22`.                                          |
-| `DEPLOY_PATH`      | ✅       | Deploy directory on the VPS, e.g. `/opt/devlog-backend`.             |
-| `HOST_PORT`        | ➖       | Host port the container publishes. Defaults to `8080`.               |
-| `BACKEND_ENV_FILE` | ➖       | Full content of `backend.env` (see `backend.env.example`). When set, every deploy rewrites `backend.env` on the VPS (0600) from this secret — single source of truth in GitHub. When unset, the file on the VPS is left as-is (manual management). |
+| Secret          | Required | Description                                                             |
+| --------------- | -------- | ----------------------------------------------------------------------- |
+| `VPS_HOST`      | ✅       | VPS IP or hostname.                                                      |
+| `VPS_USER`      | ✅       | SSH user with permission to run `docker` (e.g. `deploy`).               |
+| `VPS_SSH_KEY`   | ✅       | **Private** SSH key (full PEM) whose public half is on the VPS.         |
+| `VPS_PORT`      | ➖       | SSH port. Defaults to `22`.                                             |
+| `DEPLOY_PATH`   | ✅       | Deploy directory on the VPS, e.g. `/opt/devlog-backend`.                |
+| `HOST_PORT`     | ➖       | Host port the container publishes. Defaults to `8080`.                  |
 
-With `BACKEND_ENV_FILE` set, `DB_DSN` and the rest of the backend settings live
-in GitHub; the DSN format below still applies.
+### Backend runtime config (assembled into `backend.env`)
+
+Each deploy generates `backend.env` on the VPS from the individual fields
+below and `chmod 600`s it — no file to maintain by hand. Sensitive values go
+in the PROD environment **Secrets** tab, plain config in the **Variables** tab.
+Unset fields are simply omitted, which the backend treats as "feature
+disabled". `DB_DRIVER=mysql`, `COOKIE_SECURE=true` and `PORT=8080` are written
+automatically. **If `DB_DSN` is unset, generation is skipped entirely** and
+whatever `backend.env` already exists on the VPS is used (manual mode).
+
+| Secrets 🔒                                                | Required | Notes                                            |
+| --------------------------------------------------------- | -------- | ------------------------------------------------ |
+| `DB_DSN`                                                   | ✅       | MySQL DSN incl. password — format below.         |
+| `SESSION_SECRET`                                           | ✅       | `openssl rand -base64 32`.                        |
+| `IAM_CLIENT_SECRET`                                        | ➖       | With the IAM variables → enables login.          |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`               | ➖       | Enables card payments.                            |
+| `MOMO_PARTNER_CODE`, `MOMO_ACCESS_KEY`, `MOMO_SECRET_KEY`  | ➖       | Enables MoMo payments.                            |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`                 | ➖       | With the S3 variables → enables image uploads.   |
+
+| Variables 📋                                          | Required | Notes                                                 |
+| ------------------------------------------------------ | -------- | ------------------------------------------------------ |
+| `APP_BASE_URL`                                          | ✅       | Public frontend origin (Stripe redirects, links).      |
+| `IAM_ISSUER_URL`, `IAM_TENANT_ID`, `IAM_CLIENT_ID`      | ➖       | IAM (OIDC) integration.                                 |
+| `MOMO_CREATE_ENDPOINT`, `MOMO_QUERY_ENDPOINT`           | ➖       | Set the production MoMo URLs (defaults are sandbox).   |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`                 | ➖       | R2 endpoint / bucket / `auto` (see §6).                 |
+| `IMAGE_BASE_URL`                                        | ➖       | Public image origin, e.g. `https://img.your-domain`.   |
 
 ```
 devlog:PASSWORD@tcp(HOST:3306)/devlog?parseTime=true&loc=UTC
@@ -56,11 +79,11 @@ No registry credentials are needed — the workflow authenticates to GHCR with t
 built-in `GITHUB_TOKEN` and passes it over SSH so the VPS can pull the (private)
 image during the deploy.
 
-> Recommended: paste the filled-in `backend.env` into the `BACKEND_ENV_FILE`
-> secret (PROD environment) so all backend settings (`DB_DSN`,
-> `SESSION_SECRET`, Stripe/MoMo keys, `S3_*`/`IMAGE_BASE_URL`) are managed from
-> GitHub — editing the secret and re-running the Deploy workflow rolls out the
-> change. Without the secret, `backend.env` is maintained by hand on the VPS.
+> To change any backend setting: edit the secret/variable in GitHub and
+> re-run the **Deploy** workflow (or push to `main`) — the regenerated
+> `backend.env` rolls out with the deploy. `deployments/backend.env.example`
+> remains the reference for what each field means (and the template for
+> manual mode).
 
 ### Frontend secrets (Deploy frontend workflow)
 
@@ -97,9 +120,10 @@ sudo mkdir -p /opt/devlog-backend
 sudo chown "$USER":"$USER" /opt/devlog-backend
 cd /opt/devlog-backend
 
-# 3. Runtime env — SKIP when the BACKEND_ENV_FILE secret is set (the deploy
-#    workflow writes backend.env from it on every run). Manual alternative:
-#    fill in DB_DSN (see the DSN host guidance above), SESSION_SECRET, etc.
+# 3. Runtime env — SKIP when the DB_DSN secret is set in GitHub (the deploy
+#    workflow generates backend.env from the PROD secrets/variables on every
+#    run). Manual alternative: fill in DB_DSN (see the DSN host guidance
+#    above), SESSION_SECRET, etc.
 #    curl -fsSL https://raw.githubusercontent.com/ndmt1at21/devlog/main/deployments/backend.env.example -o backend.env
 nano backend.env
 chmod 600 backend.env
