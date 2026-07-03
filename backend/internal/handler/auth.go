@@ -13,7 +13,6 @@ import (
 
 	"github.com/ndmt1at21/devlog/backend/internal/apierr"
 	"github.com/ndmt1at21/devlog/backend/internal/authn"
-	"github.com/ndmt1at21/devlog/backend/internal/iam"
 	"github.com/ndmt1at21/devlog/backend/internal/session"
 )
 
@@ -24,8 +23,9 @@ var emailRe = regexp.MustCompile(`^\S+@\S+\.\S+$`)
 // redirect back from the IdP.
 const oauthStateCookie = "devnote_oauth_state"
 
-// googleCallbackPath is the blog redirect target IAM sends the auth code to. It
-// must be registered on the IAM client's allowed redirect URIs.
+// googleCallbackPath is the blog redirect target Google sends the auth code
+// to. {APP_BASE_URL}+googleCallbackPath must be registered as an authorized
+// redirect URI on the Google OAuth client.
 const googleCallbackPath = "/api/v1/auth/google/callback"
 
 // withSession resolves the session cookie into a SessionUser on the request
@@ -54,7 +54,7 @@ func (a *API) withSession(next http.Handler) http.Handler {
 			}
 			data.Exp = time.Now().Add(time.Duration(ts.ExpiresIn) * time.Second).Unix()
 			// Refresh the write-permission UI hint with the new token (best effort:
-			// keep the previous snapshot when IAM can't be reached).
+			// keep the previous snapshot when the check fails).
 			if ok, err := a.Auth.CheckPermissions(r.Context(), data.Access, []string{articleCreatePermission}); err == nil {
 				data.CanWrite = ok
 			}
@@ -171,8 +171,8 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := a.Auth.Register(r.Context(), in.Email, in.Password)
-	if iam.ErrConflict(err) {
+	err := a.Auth.Register(r.Context(), in.Email, in.Password, in.Name)
+	if errors.Is(err, authn.ErrConflict) {
 		writeError(w, r, apierr.ErrEmailTaken)
 		return
 	}
@@ -181,8 +181,8 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, r, http.StatusOK, map[string]any{
-		"status":  "verification_email_sent",
-		"message": "Đã gửi email xác thực. Vui lòng kiểm tra hộp thư để kích hoạt tài khoản.",
+		"status":  "registered",
+		"message": "Đăng ký thành công. Bạn có thể đăng nhập ngay bây giờ.",
 	})
 }
 
@@ -237,8 +237,8 @@ func emailLocal(email string) string {
 }
 
 // googleLogin starts "Đăng nhập với Google": it sets a CSRF-state cookie and
-// redirects the browser to IAM's federated-login URL, which runs the Google
-// flow and redirects back to googleCallback with an authorization code.
+// redirects the browser to Google's authorization URL; Google redirects back
+// to googleCallback with an authorization code.
 func (a *API) googleLogin(w http.ResponseWriter, r *http.Request) {
 	if a.Auth == nil || a.Sessions == nil {
 		http.Redirect(w, r, a.frontendURL("/login", "auth_unavailable"), http.StatusFound)
@@ -247,6 +247,11 @@ func (a *API) googleLogin(w http.ResponseWriter, r *http.Request) {
 	state, err := randomState()
 	if err != nil {
 		http.Redirect(w, r, a.frontendURL("/login", "google_failed"), http.StatusFound)
+		return
+	}
+	loginURL := a.Auth.FederatedLoginURL("google", state, a.googleRedirectURI())
+	if loginURL == "" { // provider not configured (no Google client)
+		http.Redirect(w, r, a.frontendURL("/login", "auth_unavailable"), http.StatusFound)
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -258,11 +263,11 @@ func (a *API) googleLogin(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   600,
 	})
-	http.Redirect(w, r, a.Auth.FederatedLoginURL("google", state, a.googleRedirectURI()), http.StatusFound)
+	http.Redirect(w, r, loginURL, http.StatusFound)
 }
 
 // googleCallback is the redirect target for the federated flow. It verifies the
-// state cookie, exchanges the IAM authorization code for tokens, opens a session,
+// state cookie, exchanges the authorization code for tokens, opens a session,
 // and sends the browser back to the app. On any failure it redirects to /login
 // with an error code the page surfaces inline.
 func (a *API) googleCallback(w http.ResponseWriter, r *http.Request) {

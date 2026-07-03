@@ -15,13 +15,14 @@ type Config struct {
 	DBDriver string
 	DBDSN    string
 
-	// IAM (OAuth2/OIDC) integration. Empty IAMIssuer disables real auth.
-	IAMIssuer       string // tenant protocol base, e.g. http://localhost:8080/t/devnote
-	IAMTenantID     string
-	IAMClientID     string
-	IAMClientSecret string
+	// Google OAuth client for "Đăng nhập với Google" (embedded federated
+	// login). Empty GoogleClientID disables the flow; email/password auth
+	// works regardless.
+	GoogleClientID     string
+	GoogleClientSecret string
 
-	// Session cookie signing secret.
+	// Session cookie signing secret. Also keys the embedded auth provider's
+	// access tokens (domain-separated).
 	SessionSecret string
 	// CookieSecure controls the Secure flag (disable for plain-HTTP localhost).
 	CookieSecure bool
@@ -58,15 +59,13 @@ type Config struct {
 // Load reads configuration from the environment, applying sensible dev defaults.
 func Load() (Config, error) {
 	c := Config{
-		Port:            env("PORT", "8080"),
-		DBDriver:        strings.ToLower(env("DB_DRIVER", "memory")),
-		DBDSN:           os.Getenv("DB_DSN"),
-		IAMIssuer:       os.Getenv("IAM_ISSUER_URL"),
-		IAMTenantID:     os.Getenv("IAM_TENANT_ID"),
-		IAMClientID:     os.Getenv("IAM_CLIENT_ID"),
-		IAMClientSecret: os.Getenv("IAM_CLIENT_SECRET"),
-		SessionSecret:   env("SESSION_SECRET", "dev-insecure-session-secret-change-me"),
-		CookieSecure:    env("COOKIE_SECURE", "false") == "true",
+		Port:               env("PORT", "8080"),
+		DBDriver:           strings.ToLower(env("DB_DRIVER", "memory")),
+		DBDSN:              os.Getenv("DB_DSN"),
+		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		SessionSecret:      env("SESSION_SECRET", "dev-insecure-session-secret-change-me"),
+		CookieSecure:       env("COOKIE_SECURE", "false") == "true",
 
 		AppBaseURL: env("APP_BASE_URL", "http://localhost:3000"),
 
@@ -97,11 +96,6 @@ func Load() (Config, error) {
 		return c, fmt.Errorf("unknown DB_DRIVER %q (want memory|mysql)", c.DBDriver)
 	}
 	return c, nil
-}
-
-// AuthEnabled reports whether IAM integration is configured.
-func (c Config) AuthEnabled() bool {
-	return c.IAMIssuer != "" && c.IAMClientID != ""
 }
 
 // StripeEnabled reports whether real Stripe card payments are configured. When

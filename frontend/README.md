@@ -72,13 +72,12 @@ src/
   the Go API and forward the session cookie (so the paywall is applied per-user);
   interactive parts (search, theme, comments, coffee, code-copy) are Client
   Components.
-- **Auth** requires the backend's IAM integration to be configured
-  (`IAM_ISSUER_URL` etc.). Without it, content/search/paywall/coffee-demo all work,
-  and auth endpoints return a "not configured" message by design. **Đăng nhập với
-  Google** is a federated (redirect) flow through IAM — "Continue with Google"
-  navigates to `/api/auth/google/login`; when IAM/Google aren't configured it
-  bounces back to `/login?error=…` with an inline message. See the backend
-  `.env.example` for the IAM provisioning it needs.
+- **Auth** is embedded in the Go backend (accounts in its own store; no external
+  service), so login/register work out of the box. **Đăng nhập với Google** is a
+  federated (redirect) flow — "Continue with Google" navigates to
+  `/api/auth/google/login`; when the backend's `GOOGLE_CLIENT_ID` isn't
+  configured it bounces back to `/login?error=…` with an inline message. See the
+  backend `.env.example` for the Google OAuth client setup.
 - **Theming** is token-based: the mockup's light/dark palette lives in
   `globals.css` and is mapped into Tailwind utilities via `@theme inline`, so
   utilities re-resolve when `data-theme` flips.

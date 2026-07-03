@@ -1,6 +1,7 @@
 // Command server is the devnote blog backend: a stdlib net/http API that serves
-// content, proxies auth to IAM (BFF), and handles Pro/coffee payments. It boots
-// from environment configuration (see .env.example) and applies sensible dev
+// content, handles auth in-process (embedded IAM logic: argon2id passwords,
+// signed tokens, Google login), and handles Pro/coffee payments. It boots from
+// environment configuration (see .env.example) and applies sensible dev
 // defaults, so `go run ./cmd/server` works with zero infrastructure.
 package main
 
@@ -14,9 +15,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ndmt1at21/devlog/backend/internal/authlocal"
 	"github.com/ndmt1at21/devlog/backend/internal/config"
 	"github.com/ndmt1at21/devlog/backend/internal/handler"
-	"github.com/ndmt1at21/devlog/backend/internal/iam"
 	"github.com/ndmt1at21/devlog/backend/internal/payment"
 	"github.com/ndmt1at21/devlog/backend/internal/session"
 	"github.com/ndmt1at21/devlog/backend/internal/storage"
@@ -50,14 +51,17 @@ func run() error {
 
 	api := &handler.API{Store: store, Cfg: cfg}
 
-	// Auth is optional: with IAM configured the blog becomes a confidential
-	// OAuth2 client (BFF); otherwise it runs anonymously (content + demo flows).
-	if cfg.AuthEnabled() {
-		api.Auth = iam.New(cfg.IAMIssuer, cfg.IAMClientID, cfg.IAMClientSecret)
-		api.Sessions = session.New(cfg.SessionSecret, cfg.CookieSecure)
-		log.Printf("auth: IAM enabled (issuer %s)", cfg.IAMIssuer)
+	// Auth runs in-process against the blog's own store (embedded IAM logic),
+	// so it is always on; the first registered account becomes the author.
+	api.Auth = authlocal.New(store, cfg.SessionSecret, authlocal.GoogleConfig{
+		ClientID:     cfg.GoogleClientID,
+		ClientSecret: cfg.GoogleClientSecret,
+	})
+	api.Sessions = session.New(cfg.SessionSecret, cfg.CookieSecure)
+	if cfg.GoogleClientID != "" {
+		log.Printf("auth: embedded (google login enabled)")
 	} else {
-		log.Printf("auth: disabled (set IAM_ISSUER_URL to enable)")
+		log.Printf("auth: embedded (google login disabled; set GOOGLE_CLIENT_ID to enable)")
 	}
 
 	// Real payment providers are optional; empty keys fall back to the demo flow.

@@ -60,6 +60,8 @@ func (s *Store) Comments() domain.CommentRepository           { return &commentR
 func (s *Store) Reactions() domain.ReactionRepository         { return &reactionRepo{s.db} }
 func (s *Store) Subscriptions() domain.SubscriptionRepository { return &subRepo{s.db} }
 func (s *Store) CoffeeOrders() domain.CoffeeOrderRepository   { return &coffeeRepo{s.db} }
+func (s *Store) Users() domain.UserRepository                 { return &userRepo{s.db} }
+func (s *Store) RefreshTokens() domain.RefreshTokenRepository { return &refreshTokenRepo{s.db} }
 func (s *Store) Ping(ctx context.Context) error               { return s.db.PingContext(ctx) }
 func (s *Store) Close() error                                 { return s.db.Close() }
 

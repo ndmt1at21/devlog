@@ -80,7 +80,7 @@ func (a *API) health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusOK, map[string]any{
 		"status": "ok",
 		"driver": a.Cfg.DBDriver,
-		"auth":   a.Cfg.AuthEnabled(),
+		"auth":   a.Auth != nil,
 		"time":   time.Now().UTC(),
 	})
 }

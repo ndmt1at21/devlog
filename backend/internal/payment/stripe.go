@@ -1,7 +1,7 @@
 // Package payment wraps the Stripe and MoMo HTTP APIs used by the "buy me a
-// coffee" flow. It uses the raw REST APIs (no SDK dependency), mirroring the
-// IAM client style in internal/iam. Clients are only constructed when the
-// corresponding provider is configured (see config.StripeEnabled/MomoEnabled).
+// coffee" flow. It uses the raw REST APIs (no SDK dependency). Clients are
+// only constructed when the corresponding provider is configured (see
+// config.StripeEnabled/MomoEnabled).
 package payment
 
 import (

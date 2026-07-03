@@ -114,10 +114,8 @@ jobs:
           DB_DSN: ${{ secrets.DB_DSN }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           APP_BASE_URL: ${{ vars.APP_BASE_URL }}
-          IAM_ISSUER_URL: ${{ vars.IAM_ISSUER_URL }}
-          IAM_TENANT_ID: ${{ vars.IAM_TENANT_ID }}
-          IAM_CLIENT_ID: ${{ vars.IAM_CLIENT_ID }}
-          IAM_CLIENT_SECRET: ${{ secrets.IAM_CLIENT_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           MOMO_PARTNER_CODE: ${{ secrets.MOMO_PARTNER_CODE }}
@@ -145,7 +143,7 @@ jobs:
             echo "DB_DRIVER=mysql"
             echo "COOKIE_SECURE=true"
             for k in DB_DSN SESSION_SECRET APP_BASE_URL \
-                     IAM_ISSUER_URL IAM_TENANT_ID IAM_CLIENT_ID IAM_CLIENT_SECRET \
+                     GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
                      STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET \
                      MOMO_PARTNER_CODE MOMO_ACCESS_KEY MOMO_SECRET_KEY \
                      MOMO_CREATE_ENDPOINT MOMO_QUERY_ENDPOINT \

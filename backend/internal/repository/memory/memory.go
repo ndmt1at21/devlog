@@ -23,23 +23,27 @@ type reactionKey struct {
 
 // Store is a concurrency-safe in-memory data store.
 type Store struct {
-	mu        sync.RWMutex
-	articles  []domain.Article
-	series    map[string]domain.Series
-	comments  map[string][]domain.Comment
-	reactions map[reactionKey]time.Time
-	subs      map[string]domain.Subscription
-	coffee    map[string]domain.CoffeeOrder
+	mu            sync.RWMutex
+	articles      []domain.Article
+	series        map[string]domain.Series
+	comments      map[string][]domain.Comment
+	reactions     map[reactionKey]time.Time
+	subs          map[string]domain.Subscription
+	coffee        map[string]domain.CoffeeOrder
+	users         map[string]domain.User         // by id
+	refreshTokens map[string]domain.RefreshToken // by token hash
 }
 
 // New returns a Store preloaded with the seed content.
 func New() *Store {
 	s := &Store{
-		series:    make(map[string]domain.Series),
-		comments:  make(map[string][]domain.Comment),
-		reactions: make(map[reactionKey]time.Time),
-		subs:      make(map[string]domain.Subscription),
-		coffee:    make(map[string]domain.CoffeeOrder),
+		series:        make(map[string]domain.Series),
+		comments:      make(map[string][]domain.Comment),
+		reactions:     make(map[reactionKey]time.Time),
+		subs:          make(map[string]domain.Subscription),
+		coffee:        make(map[string]domain.CoffeeOrder),
+		users:         make(map[string]domain.User),
+		refreshTokens: make(map[string]domain.RefreshToken),
 	}
 	s.articles = seed.Articles()
 	sort.SliceStable(s.articles, func(i, j int) bool { return s.articles[i].Ord < s.articles[j].Ord })
@@ -59,6 +63,8 @@ func (s *Store) Comments() domain.CommentRepository           { return (*comment
 func (s *Store) Reactions() domain.ReactionRepository         { return (*reactionRepo)(s) }
 func (s *Store) Subscriptions() domain.SubscriptionRepository { return (*subRepo)(s) }
 func (s *Store) CoffeeOrders() domain.CoffeeOrderRepository   { return (*coffeeRepo)(s) }
+func (s *Store) Users() domain.UserRepository                 { return (*userRepo)(s) }
+func (s *Store) RefreshTokens() domain.RefreshTokenRepository { return (*refreshTokenRepo)(s) }
 func (s *Store) Ping(context.Context) error                   { return nil }
 func (s *Store) Close() error                                 { return nil }
 

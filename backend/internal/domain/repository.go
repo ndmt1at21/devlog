@@ -68,6 +68,8 @@ type Store interface {
 	Reactions() ReactionRepository
 	Subscriptions() SubscriptionRepository
 	CoffeeOrders() CoffeeOrderRepository
+	Users() UserRepository
+	RefreshTokens() RefreshTokenRepository
 	// Ping verifies the backing store is reachable.
 	Ping(ctx context.Context) error
 	Close() error

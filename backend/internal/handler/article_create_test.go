@@ -16,16 +16,16 @@ import (
 	"github.com/ndmt1at21/devlog/backend/internal/session"
 )
 
-// fakeAuth is an authn.Provider stub: every login succeeds and the IAM
+// fakeAuth is an authn.Provider stub: every login succeeds and the
 // permission decision is fixed to `allow`.
 type fakeAuth struct{ allow bool }
 
 func (f *fakeAuth) Login(context.Context, string, string) (*authn.TokenSet, error) {
 	return &authn.TokenSet{AccessToken: "at", RefreshToken: "rt", ExpiresIn: 3600}, nil
 }
-func (f *fakeAuth) Register(context.Context, string, string) error { return nil }
-func (f *fakeAuth) ForgotPassword(context.Context, string) error   { return nil }
-func (f *fakeAuth) Logout(context.Context, string) error           { return nil }
+func (f *fakeAuth) Register(context.Context, string, string, string) error { return nil }
+func (f *fakeAuth) ForgotPassword(context.Context, string) error           { return nil }
+func (f *fakeAuth) Logout(context.Context, string) error                   { return nil }
 func (f *fakeAuth) Refresh(context.Context, string) (*authn.TokenSet, error) {
 	return &authn.TokenSet{AccessToken: "at2", ExpiresIn: 3600}, nil
 }

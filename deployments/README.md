@@ -48,7 +48,7 @@ whatever `backend.env` already exists on the VPS is used (manual mode).
 | --------------------------------------------------------- | -------- | ------------------------------------------------ |
 | `DB_DSN`                                                   | ✅       | MySQL DSN incl. password — format below.         |
 | `SESSION_SECRET`                                           | ✅       | `openssl rand -base64 32`.                        |
-| `IAM_CLIENT_SECRET`                                        | ➖       | With the IAM variables → enables login.          |
+| `GOOGLE_CLIENT_SECRET`                                     | ➖       | With `GOOGLE_CLIENT_ID` → enables Google login.  |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`               | ➖       | Enables card payments.                            |
 | `MOMO_PARTNER_CODE`, `MOMO_ACCESS_KEY`, `MOMO_SECRET_KEY`  | ➖       | Enables MoMo payments.                            |
 | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`                 | ➖       | With the S3 variables → enables image uploads.   |
@@ -56,7 +56,7 @@ whatever `backend.env` already exists on the VPS is used (manual mode).
 | Variables 📋                                          | Required | Notes                                                 |
 | ------------------------------------------------------ | -------- | ------------------------------------------------------ |
 | `APP_BASE_URL`                                          | ✅       | Public frontend origin (Stripe redirects, links).      |
-| `IAM_ISSUER_URL`, `IAM_TENANT_ID`, `IAM_CLIENT_ID`      | ➖       | IAM (OIDC) integration.                                 |
+| `GOOGLE_CLIENT_ID`                                      | ➖       | Google login (auth itself is embedded, always on).      |
 | `MOMO_CREATE_ENDPOINT`, `MOMO_QUERY_ENDPOINT`           | ➖       | Set the production MoMo URLs (defaults are sandbox).   |
 | `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`                 | ➖       | R2 endpoint / bucket / `auto` (see §6).                 |
 | `IMAGE_BASE_URL`                                        | ➖       | Public image origin, e.g. `https://img.your-domain`.   |

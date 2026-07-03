@@ -28,8 +28,8 @@ cd frontend && npm install && npm run dev
 
 Open http://localhost:3000 — browse/search articles, read articles (code blocks,
 diagrams, series + Pro paywall), comment, toggle dark mode, and open the coffee
-modal. Login/register/Pro need IAM (below); without it those endpoints return a
-"chưa được cấu hình" message.
+modal. Login/register work out of the box: auth is embedded in the backend (no
+external service). The first account you register becomes the author.
 
 ## Backend config (`backend/.env.example`)
 
@@ -37,9 +37,8 @@ modal. Login/register/Pro need IAM (below); without it those endpoints return a
 | --- | --- |
 | `DB_DRIVER` | `memory` (default) or `mysql` |
 | `DB_DSN` | MySQL DSN (`parseTime=true&loc=UTC&multiStatements=true`) |
-| `IAM_ISSUER_URL` | tenant issuer base, e.g. `http://localhost:8080/t/devnote` |
-| `IAM_TENANT_ID` / `IAM_CLIENT_ID` / `IAM_CLIENT_SECRET` | OAuth2 client creds |
-| `SESSION_SECRET` / `COOKIE_SECURE` | session cookie sealing |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google login (optional; empty disables it) |
+| `SESSION_SECRET` / `COOKIE_SECURE` | session cookie sealing (also keys access tokens) |
 | `APP_BASE_URL` | frontend origin for payment redirects (default `http://localhost:3000`) |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Stripe Checkout (coffee); empty → demo |
 | `MOMO_PARTNER_CODE` / `MOMO_ACCESS_KEY` / `MOMO_SECRET_KEY` | MoMo (coffee); empty → demo |
@@ -54,36 +53,38 @@ DB_DRIVER=mysql DB_DSN='devlog:devlog@tcp(localhost:3306)/devlog?parseTime=true&
 Schema migrations live in `backend/migrations/mysql/` (embedded, applied on
 startup).
 
-### Auth via IAM (`/home/ndmt1at21/iam`)
+### Auth (embedded)
 
-The backend is a confidential OAuth2 client of IAM (password grant for login,
-`/auth/register` + `/auth/forgot-password` for lifecycle, userinfo for identity;
-tokens kept in an httpOnly session cookie). To enable it:
+Auth runs in-process, embedding the IAM service's core logic instead of calling
+it over HTTP: accounts live in the blog's own store (`users` +
+`refresh_tokens`), passwords are argon2id-hashed (PHC-encoded), access tokens
+are short-lived signed JWTs, and refresh tokens are opaque, hashed at rest, and
+rotated on every use. Tokens are kept in the httpOnly session cookie as before.
+Nothing needs to be provisioned — register an account and log in.
 
-1. Run IAM: `cd ../iam && make compose-up && make run`.
-2. Provision a tenant `devnote`, a **confidential client whose `grant_types`
-   include `password` and `refresh_token`** (required — the password grant is
-   gated per-client), and the demo user `demo@blog.vn` / `123456`.
-3. Set `IAM_ISSUER_URL` (e.g. `http://localhost:8080/t/devnote`), `IAM_CLIENT_ID`,
-   `IAM_CLIENT_SECRET` in `backend/.env` and restart the backend.
+For "Đăng nhập với Google", create a Google OAuth client
+(https://console.cloud.google.com/apis/credentials), register the authorized
+redirect URI `{APP_BASE_URL}/api/v1/auth/google/callback`, and set
+`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `backend/.env`.
 
-> Note: IAM register sends a verification email and doesn't accept a display name,
-> so new accounts must verify before login; seed the demo user as active.
+> Note: with no mail service embedded, register activates the account
+> immediately (no verification email) and forgot-password is a no-op that
+> always reports success (anti-enumeration).
 
-### Publishing articles (IAM permission `articles:create`)
+### Publishing articles (permission `articles:create`)
 
-Logged-in users holding the IAM permission **`articles:create`** can publish from
+Logged-in users holding the **`articles:create`** permission can publish from
 `/articles/new` (Markdown/README or a rich-text block editor; both normalize to
 the same block model). The backend verifies the permission on every
-`POST /api/v1/articles` via IAM's policy decision endpoint (`POST
-{issuer}/authz/decision`); the account menu's "Viết bài mới" entry is only a UI
-hint snapshotted into the session at login/refresh. To grant it, in the
-`devnote` tenant:
+`POST /api/v1/articles`; the account menu's "Viết bài mới" entry is only a UI
+hint snapshotted into the session at login/refresh.
 
-1. Create resource `articles` with action `create`, then permission
-   `articles:create`.
-2. Bind the permission to a role (e.g. `author`) and assign the role to the
-   writer's account. The author picks it up at next login (or token refresh).
+Permissions derive from the user's role (`reader`, `author`, `admin`; roles
+`author`/`admin` hold `articles:create`). **The first registered account is
+bootstrapped as `author`**; everyone after that is a `reader`. To promote
+someone later, update their row (MySQL mode):
+`UPDATE users SET role='author' WHERE email='...'` — it takes effect on their
+next request (decisions read the live role, not the token).
 
 ## Frontend config (`frontend/.env.local`)
 
