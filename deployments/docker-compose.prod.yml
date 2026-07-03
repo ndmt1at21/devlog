@@ -22,12 +22,6 @@ services:
     # Created once on the VPS from backend.env.example — never committed.
     env_file:
       - backend.env
-    # Lets the container reach services on the VPS host (e.g. a DB bound to the
-    # host or a MySQL container publishing 3306) via the hostname
-    # `host.docker.internal` in DB_DSN. Harmless when DB_DSN points at an
-    # external host instead. `host-gateway` resolves to the host on Linux.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     ports:
       - "${HOST_PORT:-8080}:8080"
     logging:
