@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
@@ -52,6 +53,11 @@ func (a *API) withSession(next http.Handler) http.Handler {
 				data.Refresh = ts.RefreshToken
 			}
 			data.Exp = time.Now().Add(time.Duration(ts.ExpiresIn) * time.Second).Unix()
+			// Refresh the write-permission UI hint with the new token (best effort:
+			// keep the previous snapshot when IAM can't be reached).
+			if ok, err := a.Auth.CheckPermissions(r.Context(), data.Access, []string{articleCreatePermission}); err == nil {
+				data.CanWrite = ok
+			}
 			_ = a.Sessions.Save(w, data)
 		}
 		next.ServeHTTP(w, r.WithContext(withUser(r.Context(), a.sessionUser(r, data))))
@@ -60,11 +66,20 @@ func (a *API) withSession(next http.Handler) http.Handler {
 
 func (a *API) sessionUser(r *http.Request, d session.Data) *SessionUser {
 	return &SessionUser{
-		Sub:     d.Sub,
-		Name:    d.Name,
-		Email:   d.Email,
-		Premium: a.userPremium(r, d.Sub),
+		Sub:      d.Sub,
+		Access:   d.Access,
+		Name:     d.Name,
+		Email:    d.Email,
+		Premium:  a.userPremium(r, d.Sub),
+		CanWrite: d.CanWrite,
 	}
+}
+
+// canCreateArticles snapshots the IAM write permission for the session cookie
+// (UI hint only; the create endpoint re-checks authoritatively).
+func (a *API) canCreateArticles(ctx context.Context, accessToken string) bool {
+	ok, err := a.Auth.CheckPermissions(ctx, accessToken, []string{articleCreatePermission})
+	return err == nil && ok
 }
 
 func (a *API) userPremium(r *http.Request, sub string) bool {
@@ -113,12 +128,13 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		name = emailLocal(user.Email)
 	}
 	data := session.Data{
-		Access:  ts.AccessToken,
-		Refresh: ts.RefreshToken,
-		Exp:     time.Now().Add(time.Duration(ts.ExpiresIn) * time.Second).Unix(),
-		Sub:     user.Sub,
-		Name:    name,
-		Email:   user.Email,
+		Access:   ts.AccessToken,
+		Refresh:  ts.RefreshToken,
+		Exp:      time.Now().Add(time.Duration(ts.ExpiresIn) * time.Second).Unix(),
+		Sub:      user.Sub,
+		Name:     name,
+		Email:    user.Email,
+		CanWrite: a.canCreateArticles(r.Context(), ts.AccessToken),
 	}
 	if err := a.Sessions.Save(w, data); err != nil {
 		writeError(w, r, apierr.ErrSessionCreate)
@@ -284,12 +300,13 @@ func (a *API) googleCallback(w http.ResponseWriter, r *http.Request) {
 		name = emailLocal(user.Email)
 	}
 	data := session.Data{
-		Access:  ts.AccessToken,
-		Refresh: ts.RefreshToken,
-		Exp:     time.Now().Add(time.Duration(ts.ExpiresIn) * time.Second).Unix(),
-		Sub:     user.Sub,
-		Name:    name,
-		Email:   user.Email,
+		Access:   ts.AccessToken,
+		Refresh:  ts.RefreshToken,
+		Exp:      time.Now().Add(time.Duration(ts.ExpiresIn) * time.Second).Unix(),
+		Sub:      user.Sub,
+		Name:     name,
+		Email:    user.Email,
+		CanWrite: a.canCreateArticles(r.Context(), ts.AccessToken),
 	}
 	if err := a.Sessions.Save(w, data); err != nil {
 		http.Redirect(w, r, a.frontendURL("/login", "google_failed"), http.StatusFound)

@@ -70,6 +70,21 @@ tokens kept in an httpOnly session cookie). To enable it:
 > Note: IAM register sends a verification email and doesn't accept a display name,
 > so new accounts must verify before login; seed the demo user as active.
 
+### Publishing articles (IAM permission `articles:create`)
+
+Logged-in users holding the IAM permission **`articles:create`** can publish from
+`/articles/new` (Markdown/README or a rich-text block editor; both normalize to
+the same block model). The backend verifies the permission on every
+`POST /api/v1/articles` via IAM's policy decision endpoint (`POST
+{issuer}/authz/decision`); the account menu's "Viết bài mới" entry is only a UI
+hint snapshotted into the session at login/refresh. To grant it, in the
+`devnote` tenant:
+
+1. Create resource `articles` with action `create`, then permission
+   `articles:create`.
+2. Bind the permission to a role (e.g. `author`) and assign the role to the
+   writer's account. The author picks it up at next login (or token refresh).
+
 ## Frontend config (`frontend/.env.local`)
 
 | Var | Purpose |

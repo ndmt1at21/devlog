@@ -129,6 +129,29 @@ func (r *articleRepo) Categories(_ context.Context) ([]string, error) {
 	return out, nil
 }
 
+func (r *articleRepo) Create(_ context.Context, a domain.Article) (domain.Article, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, ex := range r.articles {
+		if ex.Slug == a.Slug {
+			return domain.Article{}, domain.ErrConflict
+		}
+	}
+	a.ID = id.NewV7()
+	maxOrd := 0
+	for _, ex := range r.articles {
+		if ex.Ord > maxOrd {
+			maxOrd = ex.Ord
+		}
+	}
+	a.Ord = maxOrd + 1
+	if a.PublishedAt.IsZero() {
+		a.PublishedAt = time.Now().UTC()
+	}
+	r.articles = append(r.articles, a)
+	return a, nil
+}
+
 func (r *articleRepo) SeriesParts(_ context.Context, seriesSlug string) ([]domain.Article, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

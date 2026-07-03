@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import type { ArticleDetail, Block, Comment } from "@/lib/types";
+import type { ArticleDetail, Comment } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
 import { useT } from "@/lib/i18n/provider";
 import { track } from "@/lib/analytics";
-import { CodeBlock } from "./blocks/CodeBlock";
-import { Diagram } from "./blocks/Diagram";
+import { BlockView } from "./BlockRenderer";
 import { AdSlot } from "./blocks/AdSlot";
 import { TagList } from "./TagList";
 import { SeriesBox } from "./SeriesBox";
@@ -19,50 +18,6 @@ import { ScrollDepthTracker } from "@/components/analytics/ScrollDepthTracker";
 // Ads appear after the 4th block (index 3) for non-premium readers, mirroring
 // the mockup's `showAds && !premium && blocks>3` rule.
 const AD_INDEX = 3;
-
-function renderBlock(block: Block, i: number, slug: string) {
-  switch (block.type) {
-    case "h":
-      return (
-        <h2
-          key={i}
-          className="mb-2.5 mt-11 text-[25px] font-bold leading-[1.3] tracking-[-.02em] text-text"
-        >
-          {block.text}
-        </h2>
-      );
-    case "quote":
-      return (
-        <blockquote
-          key={i}
-          className="my-[30px] border-l-[3px] border-accent py-1.5 pl-[22px] text-[20px] font-medium leading-[1.6] text-c3a"
-        >
-          {block.text}
-        </blockquote>
-      );
-    case "code":
-      return (
-        <CodeBlock
-          key={i}
-          lang={block.lang}
-          code={block.code ?? ""}
-          html={block.html}
-          slug={slug}
-        />
-      );
-    case "diagram":
-      return (
-        <Diagram key={i} steps={block.steps ?? []} caption={block.caption} />
-      );
-    case "p":
-    default:
-      return (
-        <p key={i} className="mb-[22px]">
-          {block.text}
-        </p>
-      );
-  }
-}
 
 export function ArticleView({
   detail,
@@ -128,7 +83,7 @@ export function ArticleView({
       <div className="text-[19px] leading-[1.85] text-body">
         {detail.body.map((block, i) => (
           <div key={i}>
-            {renderBlock(block, i, detail.slug)}
+            <BlockView block={block} slug={detail.slug} />
             {showAds && i === AD_INDEX && <AdSlot slot="in-content" />}
           </div>
         ))}

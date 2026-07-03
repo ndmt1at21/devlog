@@ -1,6 +1,6 @@
 // API response types — mirror the Go backend DTOs (backend/internal/handler).
 
-export type BlockType = "p" | "h" | "quote" | "code" | "diagram" | "ad";
+export type BlockType = "p" | "h" | "quote" | "code" | "diagram" | "list" | "ad";
 
 export interface Block {
   type: BlockType;
@@ -9,8 +9,22 @@ export interface Block {
   code?: string;
   caption?: string;
   steps?: string[];
+  /** List items for `list` blocks; may carry inline markdown spans. */
+  items?: string[];
+  ordered?: boolean;
   /** Server-rendered Shiki HTML for `code` blocks (added during SSR). */
   html?: string;
+}
+
+/** Payload for POST /articles. Body is either markdown source or editor blocks. */
+export interface NewArticleInput {
+  title: string;
+  excerpt?: string;
+  category: string;
+  tags: string[];
+  format: "markdown" | "blocks";
+  content?: string;
+  body?: Block[];
 }
 
 export interface ArticleSummary {
@@ -74,6 +88,8 @@ export interface SessionUser {
   name: string;
   email: string;
   premium: boolean;
+  /** UI hint: the IAM "articles:create" permission (server re-checks on POST). */
+  canWrite: boolean;
 }
 
 export interface MeResponse {

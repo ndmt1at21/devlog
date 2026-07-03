@@ -33,7 +33,8 @@ func def(code, status int, msg string) *Error {
 const CodeOK = 0
 
 // Registry. Codes are grouped by domain and MUST remain stable:
-//   1xxx generic · 2xxx auth · 3xxx content · 4xxx comments · 5xxx pro · 6xxx coffee
+//
+//	1xxx generic · 2xxx auth · 3xxx content · 4xxx comments · 5xxx pro · 6xxx coffee
 var (
 	// --- generic (1xxx) ---
 	ErrBadRequest   = def(1000, http.StatusBadRequest, "Dữ liệu gửi lên không hợp lệ.")
@@ -61,6 +62,8 @@ var (
 	ErrFeaturedNotFound = def(3002, http.StatusNotFound, "Chưa có bài viết nổi bật.")
 	ErrArticleLoad      = def(3003, http.StatusInternalServerError, "Không tải được bài viết.")
 	ErrCategoryList     = def(3004, http.StatusInternalServerError, "Không tải được danh mục.")
+	ErrArticleForbidden = def(3005, http.StatusForbidden, "Bạn không có quyền tạo bài viết.")
+	ErrArticleCreate    = def(3006, http.StatusInternalServerError, "Không tạo được bài viết.")
 
 	// --- comments (4xxx) ---
 	ErrCommentList   = def(4000, http.StatusInternalServerError, "Không tải được bình luận.")
@@ -72,11 +75,11 @@ var (
 	ErrSubscribeFailed  = def(5002, http.StatusInternalServerError, "Không kích hoạt được Pro.")
 
 	// --- coffee (6xxx) ---
-	ErrCoffeeAmount       = def(6000, http.StatusBadRequest, "Số tiền không hợp lệ.")
-	ErrCoffeeMethod       = def(6001, http.StatusBadRequest, "Phương thức thanh toán không hợp lệ.")
-	ErrCoffeeCheckoutCard = def(6002, http.StatusBadGateway, "Không khởi tạo được thanh toán thẻ.")
-	ErrCoffeeCheckoutMomo = def(6003, http.StatusBadGateway, "Không khởi tạo được thanh toán MoMo.")
-	ErrCoffeeOrderCreate  = def(6004, http.StatusInternalServerError, "Không tạo được đơn hàng.")
+	ErrCoffeeAmount        = def(6000, http.StatusBadRequest, "Số tiền không hợp lệ.")
+	ErrCoffeeMethod        = def(6001, http.StatusBadRequest, "Phương thức thanh toán không hợp lệ.")
+	ErrCoffeeCheckoutCard  = def(6002, http.StatusBadGateway, "Không khởi tạo được thanh toán thẻ.")
+	ErrCoffeeCheckoutMomo  = def(6003, http.StatusBadGateway, "Không khởi tạo được thanh toán MoMo.")
+	ErrCoffeeOrderCreate   = def(6004, http.StatusInternalServerError, "Không tạo được đơn hàng.")
 	ErrCoffeeOrderNotFound = def(6005, http.StatusNotFound, "Không tìm thấy đơn hàng.")
-	ErrCoffeeLoad         = def(6006, http.StatusInternalServerError, "Không tải được đơn hàng.")
+	ErrCoffeeLoad          = def(6006, http.StatusInternalServerError, "Không tải được đơn hàng.")
 )

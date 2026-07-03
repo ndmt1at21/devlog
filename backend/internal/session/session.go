@@ -30,6 +30,10 @@ type Data struct {
 	Sub     string `json:"s"`
 	Name    string `json:"n"`
 	Email   string `json:"m"`
+	// CanWrite is a UI-hint snapshot of the IAM "articles:create" permission,
+	// evaluated at login and refreshed with the access token. Enforcement always
+	// re-checks IAM on write endpoints.
+	CanWrite bool `json:"w,omitempty"`
 }
 
 // Expired reports whether the access token has passed its expiry.

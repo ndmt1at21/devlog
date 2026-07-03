@@ -1,0 +1,655 @@
+"use client";
+
+// New-article editor. Two authoring modes normalize to the same block model
+// the backend stores: "markdown" sends raw README-style source (converted
+// server-side), "blocks" sends the structured rich-text editor output. The
+// page is only a convenience for holders of the IAM permission
+// `articles:create` — the backend re-checks it on every POST.
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMemo, useRef, useState } from "react";
+import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { useT } from "@/lib/i18n/provider";
+import { track } from "@/lib/analytics";
+import { blocksFromMarkdown } from "@/lib/markdown";
+import type { Block, NewArticleInput } from "@/lib/types";
+import { BlockView } from "@/components/article/BlockRenderer";
+
+type Mode = "markdown" | "blocks";
+type EditorBlockType = "p" | "h" | "quote" | "code" | "diagram" | "list";
+
+// One row of the rich-text editor. `lines` holds diagram steps / list items,
+// one per line; only the fields relevant to `type` are sent.
+interface EditorBlock {
+  id: number;
+  type: EditorBlockType;
+  text: string;
+  lang: string;
+  code: string;
+  caption: string;
+  lines: string;
+  ordered: boolean;
+}
+
+let nextId = 1;
+const newBlock = (type: EditorBlockType = "p"): EditorBlock => ({
+  id: nextId++,
+  type,
+  text: "",
+  lang: "",
+  code: "",
+  caption: "",
+  lines: "",
+  ordered: false,
+});
+
+const splitLines = (s: string) =>
+  s
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+function toBlocks(rows: EditorBlock[]): Block[] {
+  const out: Block[] = [];
+  for (const b of rows) {
+    switch (b.type) {
+      case "code":
+        if (b.code.trim())
+          out.push({ type: "code", lang: b.lang.trim(), code: b.code });
+        break;
+      case "diagram": {
+        const steps = splitLines(b.lines);
+        if (steps.length > 0)
+          out.push({ type: "diagram", steps, caption: b.caption.trim() });
+        break;
+      }
+      case "list": {
+        const items = splitLines(b.lines);
+        if (items.length > 0)
+          out.push({ type: "list", items, ordered: b.ordered });
+        break;
+      }
+      default:
+        if (b.text.trim()) out.push({ type: b.type, text: b.text.trim() });
+    }
+  }
+  return out;
+}
+
+const fieldCls = "field px-[14px] py-3 text-[15px]";
+const labelCls = "mb-[7px] block text-[13.5px] font-semibold text-strong";
+
+export function NewArticleForm() {
+  const router = useRouter();
+  const { user, loading } = useAuth();
+  const t = useT();
+
+  const [title, setTitle] = useState("");
+  const [excerpt, setExcerpt] = useState("");
+  const [category, setCategory] = useState("");
+  const [tagsRaw, setTagsRaw] = useState("");
+  const [mode, setMode] = useState<Mode>("markdown");
+  const [markdown, setMarkdown] = useState("");
+  const [rows, setRows] = useState<EditorBlock[]>([newBlock()]);
+  const [preview, setPreview] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  // Last-focused text field, so the inline-format toolbar knows its target.
+  const activeField = useRef<HTMLTextAreaElement | null>(null);
+
+  const previewBlocks = useMemo<Block[]>(
+    () => (mode === "markdown" ? blocksFromMarkdown(markdown) : toBlocks(rows)),
+    [mode, markdown, rows],
+  );
+
+  if (!user) {
+    if (loading) {
+      return (
+        <div
+          className="mx-auto max-w-[760px] px-6 pb-24 pt-16 text-center text-muted"
+          aria-busy="true"
+        >
+          …
+        </div>
+      );
+    }
+    return (
+      <Notice title={t("editor.needLoginTitle")} body={t("editor.needLogin")}>
+        <Link href="/login" className="btn-accent inline-block px-6 py-3 text-[15px] no-underline">
+          {t("editor.loginCta")}
+        </Link>
+      </Notice>
+    );
+  }
+  if (!user.canWrite) {
+    return (
+      <Notice
+        title={t("editor.noPermissionTitle")}
+        body={t("editor.noPermission")}
+      />
+    );
+  }
+
+  const update = (id: number, patch: Partial<EditorBlock>) =>
+    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  const move = (id: number, dir: -1 | 1) =>
+    setRows((rs) => {
+      const i = rs.findIndex((r) => r.id === id);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= rs.length) return rs;
+      const next = [...rs];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+
+  const remove = (id: number) =>
+    setRows((rs) => (rs.length > 1 ? rs.filter((r) => r.id !== id) : rs));
+
+  // Wrap the selection of the last-focused textarea in inline markers. State is
+  // updated through the field's data-target key so React stays the source of
+  // truth; the DOM element is only read for the selection range.
+  const applyInline = (before: string, after: string) => {
+    const el = activeField.current;
+    if (!el) return;
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const selected = el.value.slice(start, end);
+    const next =
+      el.value.slice(0, start) + before + selected + after + el.value.slice(end);
+    const target = el.dataset.target;
+    if (target === "md") setMarkdown(next);
+    else if (target) update(Number(target), { text: next });
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + before.length, end + before.length);
+    });
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!title.trim()) return setError(t("editor.errTitle"));
+    if (!category.trim()) return setError(t("editor.errCategory"));
+
+    const tags = tagsRaw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+    const base = {
+      title: title.trim(),
+      excerpt: excerpt.trim() || undefined,
+      category: category.trim(),
+      tags,
+    };
+    let payload: NewArticleInput;
+    if (mode === "markdown") {
+      if (!markdown.trim()) return setError(t("editor.errBody"));
+      payload = { ...base, format: "markdown", content: markdown };
+    } else {
+      const body = toBlocks(rows);
+      if (body.length === 0) return setError(t("editor.errBody"));
+      payload = { ...base, format: "blocks", body };
+    }
+
+    setBusy(true);
+    try {
+      const created = await api.createArticle(payload);
+      track("create_article", { slug: created.slug, format: mode });
+      router.push(`/articles/${created.slug}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("error.body"));
+      setBusy(false);
+    }
+  };
+
+  const focusProps = {
+    onFocus: (e: React.FocusEvent<HTMLTextAreaElement>) => {
+      activeField.current = e.currentTarget;
+    },
+  };
+
+  return (
+    <div className="mx-auto max-w-[760px] px-6 pb-24 pt-9">
+      <h1 className="m-0 mb-2 text-[30px] font-extrabold tracking-[-.03em] text-text">
+        {t("editor.title")}
+      </h1>
+      <p className="m-0 mb-[26px] text-[15px] text-muted">{t("editor.sub")}</p>
+
+      <form onSubmit={submit} className="rounded-2xl border border-border bg-surface p-7">
+        {/* --- metadata --- */}
+        <label htmlFor="art-title" className={labelCls}>
+          {t("editor.titleLabel")}
+        </label>
+        <input
+          id="art-title"
+          value={title}
+          maxLength={300}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder={t("editor.titlePlaceholder")}
+          className={`${fieldCls} mb-[18px]`}
+        />
+
+        <div className="mb-[18px] grid gap-[18px] sm:grid-cols-2">
+          <div>
+            <label htmlFor="art-category" className={labelCls}>
+              {t("editor.categoryLabel")}
+            </label>
+            <input
+              id="art-category"
+              value={category}
+              maxLength={80}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder={t("editor.categoryPlaceholder")}
+              className={fieldCls}
+            />
+          </div>
+          <div>
+            <label htmlFor="art-tags" className={labelCls}>
+              {t("editor.tagsLabel")}
+            </label>
+            <input
+              id="art-tags"
+              value={tagsRaw}
+              onChange={(e) => setTagsRaw(e.target.value)}
+              placeholder={t("editor.tagsPlaceholder")}
+              className={fieldCls}
+            />
+          </div>
+        </div>
+
+        <label htmlFor="art-excerpt" className={labelCls}>
+          {t("editor.excerptLabel")}
+        </label>
+        <textarea
+          id="art-excerpt"
+          value={excerpt}
+          maxLength={500}
+          rows={2}
+          onChange={(e) => setExcerpt(e.target.value)}
+          placeholder={t("editor.excerptPlaceholder")}
+          className={`${fieldCls} mb-[22px] resize-y`}
+        />
+
+        {/* --- format mode --- */}
+        <div
+          role="radiogroup"
+          aria-label={t("editor.formatLabel")}
+          className="mb-4 flex gap-1.5"
+        >
+          {(["markdown", "blocks"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={mode === m}
+              onClick={() => setMode(m)}
+              className={`cursor-pointer rounded-full border px-4 py-1.5 text-[13.5px] font-semibold transition-colors ${
+                mode === m
+                  ? "border-accent-ink text-accent-ink"
+                  : "border-border2 text-c5b hover:border-hover"
+              }`}
+            >
+              {m === "markdown" ? t("editor.modeMarkdown") : t("editor.modeRich")}
+            </button>
+          ))}
+        </div>
+
+        {/* --- edit / preview tabs + inline toolbar --- */}
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div role="tablist" aria-label={t("editor.formatLabel")} className="flex gap-1.5">
+            {([false, true] as const).map((p) => (
+              <button
+                key={String(p)}
+                type="button"
+                role="tab"
+                aria-selected={preview === p}
+                aria-controls={p ? "editor-preview" : "editor-edit"}
+                onClick={() => setPreview(p)}
+                className={`cursor-pointer rounded-[9px] px-3.5 py-1.5 text-[13.5px] font-semibold transition-colors ${
+                  preview === p ? "bg-hoverbg text-strong" : "text-muted hover:text-strong"
+                }`}
+              >
+                {p ? t("editor.tabPreview") : t("editor.tabEdit")}
+              </button>
+            ))}
+          </div>
+          {!preview && (
+            <div className="flex gap-1" aria-label={t("editor.inlineHint")}>
+              <ToolbarBtn label={t("editor.bold")} onApply={() => applyInline("**", "**")}>
+                <b>B</b>
+              </ToolbarBtn>
+              <ToolbarBtn label={t("editor.italic")} onApply={() => applyInline("*", "*")}>
+                <i>I</i>
+              </ToolbarBtn>
+              <ToolbarBtn label={t("editor.inlineCode")} onApply={() => applyInline("`", "`")}>
+                <span className="font-mono">{"<>"}</span>
+              </ToolbarBtn>
+              <ToolbarBtn label={t("editor.link")} onApply={() => applyInline("[", "](https://)")}>
+                🔗
+              </ToolbarBtn>
+            </div>
+          )}
+        </div>
+
+        {preview ? (
+          <div
+            id="editor-preview"
+            role="tabpanel"
+            className="mb-4 min-h-[220px] rounded-[14px] border border-border bg-bg px-5 py-2 text-[17px] leading-[1.85] text-body"
+          >
+            {previewBlocks.length === 0 ? (
+              <p className="py-4 text-[14px] text-muted">{t("editor.previewEmpty")}</p>
+            ) : (
+              previewBlocks.map((b, i) => <BlockView key={i} block={b} slug="preview" />)
+            )}
+          </div>
+        ) : (
+          <div id="editor-edit" role="tabpanel" className="mb-4">
+            {mode === "markdown" ? (
+              <>
+                <label htmlFor="art-md" className="sr-only">
+                  {t("editor.markdownLabel")}
+                </label>
+                <textarea
+                  id="art-md"
+                  data-target="md"
+                  value={markdown}
+                  rows={16}
+                  onChange={(e) => setMarkdown(e.target.value)}
+                  placeholder={t("editor.markdownPlaceholder")}
+                  className={`${fieldCls} resize-y font-mono text-[13.5px] leading-[1.7]`}
+                  {...focusProps}
+                />
+                <p className="mt-2 text-[12.5px] leading-[1.6] text-subtle">
+                  {t("editor.markdownHint")}
+                </p>
+              </>
+            ) : (
+              <>
+                {rows.map((row, i) => (
+                  <BlockRow
+                    key={row.id}
+                    row={row}
+                    index={i}
+                    count={rows.length}
+                    onUpdate={update}
+                    onMove={move}
+                    onRemove={remove}
+                    focusProps={focusProps}
+                  />
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setRows((rs) => [...rs, newBlock()])}
+                  className="cursor-pointer rounded-[9px] border border-dashed border-border2 px-4 py-2 text-[13.5px] font-semibold text-c5b transition-colors hover:border-hover hover:text-strong"
+                >
+                  {t("editor.addBlock")}
+                </button>
+                <p className="mt-2 text-[12.5px] leading-[1.6] text-subtle">
+                  {t("editor.inlineHint")}
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        <div role="alert" className="mb-2 min-h-[20px] text-[13px] font-medium text-danger">
+          {error}
+        </div>
+        <button
+          type="submit"
+          disabled={busy}
+          className="btn-accent w-full py-[13px] text-[15px] disabled:opacity-60"
+        >
+          {busy ? t("editor.submitting") : t("editor.submit")}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function Notice({
+  title,
+  body,
+  children,
+}: {
+  title: string;
+  body: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="mx-auto max-w-[520px] px-6 pb-24 pt-16 text-center">
+      <h1 className="m-0 mb-2 text-[26px] font-extrabold tracking-[-.02em] text-text">
+        {title}
+      </h1>
+      <p className="m-0 mb-6 text-[15px] leading-[1.7] text-muted">{body}</p>
+      {children}
+    </div>
+  );
+}
+
+// Toolbar buttons keep the textarea selection alive by cancelling the
+// mousedown focus steal, so applyInline still sees the user's selection.
+function ToolbarBtn({
+  label,
+  onApply,
+  children,
+}: {
+  label: string;
+  onApply: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onApply}
+      className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-[7px] border border-border2 text-[13px] text-c5b transition-colors hover:border-hover hover:text-strong"
+    >
+      {children}
+    </button>
+  );
+}
+
+function BlockRow({
+  row,
+  index,
+  count,
+  onUpdate,
+  onMove,
+  onRemove,
+  focusProps,
+}: {
+  row: EditorBlock;
+  index: number;
+  count: number;
+  onUpdate: (id: number, patch: Partial<EditorBlock>) => void;
+  onMove: (id: number, dir: -1 | 1) => void;
+  onRemove: (id: number) => void;
+  focusProps: {
+    onFocus: (e: React.FocusEvent<HTMLTextAreaElement>) => void;
+  };
+}) {
+  const t = useT();
+  const n = { n: index + 1 };
+  const types: Array<{ value: EditorBlockType; label: string }> = [
+    { value: "p", label: t("editor.blockP") },
+    { value: "h", label: t("editor.blockH") },
+    { value: "quote", label: t("editor.blockQuote") },
+    { value: "code", label: t("editor.blockCode") },
+    { value: "diagram", label: t("editor.blockDiagram") },
+    { value: "list", label: t("editor.blockList") },
+  ];
+
+  return (
+    <div className="mb-3 rounded-[14px] border border-border bg-bg p-3.5">
+      <div className="mb-2.5 flex items-center gap-1.5">
+        <label htmlFor={`blk-type-${row.id}`} className="sr-only">
+          {t("editor.blockTypeLabel", n)}
+        </label>
+        <select
+          id={`blk-type-${row.id}`}
+          value={row.type}
+          onChange={(e) =>
+            onUpdate(row.id, { type: e.target.value as EditorBlockType })
+          }
+          className="field w-auto cursor-pointer px-3 py-1.5 text-[13.5px] font-semibold"
+        >
+          {types.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <span className="flex-1" />
+        <IconBtn
+          label={t("editor.moveUp", n)}
+          disabled={index === 0}
+          onClick={() => onMove(row.id, -1)}
+        >
+          ↑
+        </IconBtn>
+        <IconBtn
+          label={t("editor.moveDown", n)}
+          disabled={index === count - 1}
+          onClick={() => onMove(row.id, 1)}
+        >
+          ↓
+        </IconBtn>
+        <IconBtn
+          label={t("editor.removeBlock", n)}
+          disabled={count === 1}
+          onClick={() => onRemove(row.id)}
+        >
+          ✕
+        </IconBtn>
+      </div>
+
+      {(row.type === "p" || row.type === "h" || row.type === "quote") && (
+        <>
+          <label htmlFor={`blk-text-${row.id}`} className="sr-only">
+            {t("editor.textLabel", n)}
+          </label>
+          <textarea
+            id={`blk-text-${row.id}`}
+            data-target={String(row.id)}
+            value={row.text}
+            rows={row.type === "p" ? 3 : 1}
+            onChange={(e) => onUpdate(row.id, { text: e.target.value })}
+            placeholder={t("editor.textPlaceholder")}
+            className={`${fieldCls} resize-y`}
+            {...focusProps}
+          />
+        </>
+      )}
+
+      {row.type === "code" && (
+        <>
+          <label htmlFor={`blk-lang-${row.id}`} className="sr-only">
+            {t("editor.langLabel", n)}
+          </label>
+          <input
+            id={`blk-lang-${row.id}`}
+            value={row.lang}
+            maxLength={40}
+            onChange={(e) => onUpdate(row.id, { lang: e.target.value })}
+            placeholder={t("editor.langPlaceholder")}
+            className={`${fieldCls} mb-2 w-[180px] font-mono text-[13px]`}
+          />
+          <label htmlFor={`blk-code-${row.id}`} className="sr-only">
+            {t("editor.codeLabel", n)}
+          </label>
+          <textarea
+            id={`blk-code-${row.id}`}
+            value={row.code}
+            rows={6}
+            onChange={(e) => onUpdate(row.id, { code: e.target.value })}
+            placeholder={t("editor.codePlaceholder")}
+            className={`${fieldCls} resize-y font-mono text-[13px] leading-[1.7]`}
+            spellCheck={false}
+          />
+        </>
+      )}
+
+      {(row.type === "diagram" || row.type === "list") && (
+        <>
+          <label htmlFor={`blk-lines-${row.id}`} className="sr-only">
+            {row.type === "diagram"
+              ? t("editor.stepsLabel", n)
+              : t("editor.itemsLabel", n)}
+          </label>
+          <textarea
+            id={`blk-lines-${row.id}`}
+            value={row.lines}
+            rows={3}
+            onChange={(e) => onUpdate(row.id, { lines: e.target.value })}
+            placeholder={
+              row.type === "diagram"
+                ? t("editor.stepsPlaceholder")
+                : t("editor.itemsPlaceholder")
+            }
+            className={`${fieldCls} resize-y`}
+          />
+          {row.type === "diagram" && (
+            <>
+              <label htmlFor={`blk-caption-${row.id}`} className="sr-only">
+                {t("editor.captionLabel", n)}
+              </label>
+              <input
+                id={`blk-caption-${row.id}`}
+                value={row.caption}
+                maxLength={300}
+                onChange={(e) => onUpdate(row.id, { caption: e.target.value })}
+                placeholder={t("editor.captionPlaceholder")}
+                className={`${fieldCls} mt-2`}
+              />
+            </>
+          )}
+          {row.type === "list" && (
+            <label className="mt-2 flex cursor-pointer items-center gap-2 text-[13.5px] font-medium text-strong">
+              <input
+                type="checkbox"
+                checked={row.ordered}
+                onChange={(e) => onUpdate(row.id, { ordered: e.target.checked })}
+                className="h-4 w-4 accent-[var(--accent-ink)]"
+              />
+              {t("editor.orderedLabel")}
+            </label>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function IconBtn({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-[7px] border border-border2 text-[12px] text-c5b transition-colors hover:border-hover hover:text-strong disabled:cursor-default disabled:opacity-40"
+    >
+      {children}
+    </button>
+  );
+}

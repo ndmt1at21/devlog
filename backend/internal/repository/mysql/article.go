@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ndmt1at21/devlog/backend/internal/domain"
+	"github.com/ndmt1at21/devlog/backend/internal/platform/id"
 )
 
 type articleRepo struct{ db *sql.DB }
@@ -121,6 +122,32 @@ func (r *articleRepo) Categories(ctx context.Context) ([]string, error) {
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+func (r *articleRepo) Create(ctx context.Context, a domain.Article) (domain.Article, error) {
+	tags, err := marshalJSON(a.Tags)
+	if err != nil {
+		return domain.Article{}, err
+	}
+	body, err := marshalJSON(a.Body)
+	if err != nil {
+		return domain.Article{}, err
+	}
+	a.ID = id.NewV7()
+	now := timeNow()
+	if a.PublishedAt.IsZero() {
+		a.PublishedAt = now
+	}
+	// INSERT … SELECT computes Ord = max+1 atomically against the same table
+	// (aggregate SELECT yields exactly one row even when the table is empty).
+	if _, err := r.db.ExecContext(ctx, `INSERT INTO articles
+		 (id, slug, ord, featured, category, author, read_time, published_at, title, excerpt, cover, tags, series_slug, series_part, part_title, body, created_at, updated_at)
+		 SELECT ?, ?, COALESCE(MAX(ord), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM articles`,
+		a.ID, a.Slug, a.Featured, a.Category, a.Author, a.ReadTime, a.PublishedAt, a.Title, a.Excerpt,
+		nullStr(a.Cover), tags, nullStr(a.Series), nullInt(a.Part), nullStr(a.PartTitle), body, now, now); err != nil {
+		return domain.Article{}, mapError(err)
+	}
+	return a, nil
 }
 
 func (r *articleRepo) SeriesParts(ctx context.Context, seriesSlug string) ([]domain.Article, error) {

@@ -3,8 +3,10 @@
 // Every response is the uniform envelope { code, message, traceId, data }; this
 // unwraps `data` on success (code 0) and throws a translated ApiError otherwise.
 import type {
+  ArticleDetail,
   Comment,
   MeResponse,
+  NewArticleInput,
   Plan,
   SubscriptionState,
 } from "./types";
@@ -61,6 +63,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  // --- articles ---
+  createArticle: (body: NewArticleInput) =>
+    request<ArticleDetail>("/articles", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   // --- comments ---
   listComments: (slug: string) =>
     request<Comment[]>(`/articles/${encodeURIComponent(slug)}/comments`),

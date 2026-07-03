@@ -93,6 +93,22 @@ export function AccountMenu() {
               </>
             )}
 
+            {loggedIn && user.canWrite && (
+              <button
+                role="menuitem"
+                onClick={() => go("/articles/new")}
+                className={`${item} font-medium text-strong`}
+              >
+                <span
+                  aria-hidden="true"
+                  className="w-[18px] text-center text-[15px]"
+                >
+                  ✍️
+                </span>
+                {t("account.write")}
+              </button>
+            )}
+
             {proEnabled &&
               (premium ? (
                 <button

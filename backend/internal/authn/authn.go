@@ -46,6 +46,12 @@ type Provider interface {
 	// ExchangeCode exchanges an authorization code (from the federated callback)
 	// for a token set via the authorization_code grant.
 	ExchangeCode(ctx context.Context, code, redirectURI string) (*TokenSet, error)
+
+	// CheckPermissions reports whether the access token carries ALL of the
+	// required IAM permissions (names follow IAM's "resource:action" convention),
+	// as evaluated by IAM's policy decision endpoint. An invalid/expired token
+	// yields (false, nil); transport failures yield an error (callers fail closed).
+	CheckPermissions(ctx context.Context, accessToken string, required []string) (bool, error)
 }
 
 var (

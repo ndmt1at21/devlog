@@ -15,6 +15,9 @@ type ArticleRepository interface {
 	Categories(ctx context.Context) ([]string, error)
 	// SeriesParts returns the ordered parts (by Part asc) of a series.
 	SeriesParts(ctx context.Context, seriesSlug string) ([]Article, error)
+	// Create persists a new article, assigning its ID and Ord (appended after the
+	// current maximum). Returns ErrConflict when the slug is already taken.
+	Create(ctx context.Context, a Article) (Article, error)
 }
 
 // SeriesRepository serves series metadata.

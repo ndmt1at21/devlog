@@ -204,6 +204,34 @@ func (c *Client) UserInfo(ctx context.Context, accessToken string) (*authn.User,
 	}, nil
 }
 
+// CheckPermissions asks IAM's policy decision endpoint whether the access token
+// carries ALL of the required permissions. The PDP returns 200 with allow=false
+// for invalid/expired tokens or missing permissions, so only transport/protocol
+// failures surface as errors.
+func (c *Client) CheckPermissions(ctx context.Context, accessToken string, required []string) (bool, error) {
+	payload, _ := json.Marshal(map[string]any{
+		"token":                accessToken,
+		"required_permissions": required,
+		"match_all":            true,
+	})
+	resp, err := c.postJSON(ctx, "/authz/decision", payload)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return false, fmt.Errorf("authz decision status %d", resp.StatusCode)
+	}
+	var d struct {
+		Allow  bool   `json:"allow"`
+		Reason string `json:"reason"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&d); err != nil {
+		return false, err
+	}
+	return d.Allow, nil
+}
+
 func (c *Client) postJSON(ctx context.Context, path string, body []byte) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.issuer+path, bytes.NewReader(body))
 	if err != nil {

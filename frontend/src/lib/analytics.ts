@@ -19,6 +19,7 @@ declare global {
 // sites honest without forcing an exhaustive param schema per event.
 export type AnalyticsEvent =
   | "view_article"
+  | "create_article"
   | "select_article"
   | "search"
   | "select_category"
