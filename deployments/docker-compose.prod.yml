@@ -29,3 +29,9 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    networks:
+      - devlog
+
+networks:
+  devlog:
+    external: true
