@@ -99,10 +99,7 @@ func (s *Store) migrate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		for _, stmt := range strings.Split(string(content), ";") {
-			if strings.TrimSpace(stmt) == "" {
-				continue
-			}
+		for _, stmt := range splitStatements(string(content)) {
 			if _, err := s.db.ExecContext(ctx, stmt); err != nil {
 				return fmt.Errorf("apply %s: %w", name, err)
 			}
@@ -178,6 +175,29 @@ func (s *Store) Seed(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// splitStatements breaks a migration file into executable statements: it drops
+// whole-line "--" comments first so semicolons inside comment prose don't cut a
+// statement short (see 0003_reactions.up.sql), then splits on ";" and discards
+// empty fragments. Constraints for migration authors: don't put ";" in inline
+// trailing comments or string literals (none of our DDL needs either).
+func splitStatements(sql string) []string {
+	var b strings.Builder
+	for line := range strings.Lines(sql) {
+		if strings.HasPrefix(strings.TrimSpace(line), "--") {
+			continue
+		}
+		b.WriteString(line)
+	}
+	var out []string
+	for _, stmt := range strings.Split(b.String(), ";") {
+		if strings.TrimSpace(stmt) == "" {
+			continue
+		}
+		out = append(out, stmt)
+	}
+	return out
 }
 
 // ---- shared helpers ----
