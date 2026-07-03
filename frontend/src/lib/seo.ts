@@ -8,7 +8,7 @@ export const SITE_URL = (
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"
 ).replace(/\/$/, "");
 
-export const SITE_NAME = "devnote";
+export const SITE_NAME = "jamti";
 
 /** Resolve a site-relative path to an absolute URL. */
 export function absoluteUrl(path = "/"): string {
@@ -22,6 +22,6 @@ export const organization = {
   url: SITE_URL,
   logo: {
     "@type": "ImageObject",
-    url: absoluteUrl("/opengraph-image"),
+    url: absoluteUrl("/icon-512.png"),
   },
 } as const;

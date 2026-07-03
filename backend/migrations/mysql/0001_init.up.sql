@@ -1,6 +1,6 @@
 -- devlog blog initial schema (MySQL).
 -- IDs are CHAR(36) UUIDv7 (app-side, time-ordered). List/object fields use JSON.
--- Timestamps are DATETIME(6); the app writes created_at/updated_at in UTC.
+-- Timestamps are DATETIME(6). The app writes created_at/updated_at in UTC.
 
 CREATE TABLE articles (
     id           CHAR(36) PRIMARY KEY,

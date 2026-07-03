@@ -3,14 +3,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { useSearch } from "@/lib/search";
 import { useCoffee } from "@/components/coffee/CoffeeModal";
 import { donateEnabled } from "@/lib/features";
 import { useT } from "@/lib/i18n/provider";
+import { SITE_NAME } from "@/lib/seo";
 import { AccountMenu } from "./AccountMenu";
+import { SearchBox } from "./SearchBox";
 
 export function Header() {
-  const { query, setQuery } = useSearch();
   const { open: openCoffee } = useCoffee();
   const t = useT();
   const [searchExpanded, setSearchExpanded] = useState(false);
@@ -18,17 +18,27 @@ export function Header() {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-[var(--header-bg)] backdrop-blur-[10px] backdrop-saturate-[140%]">
       <div className="relative mx-auto flex max-w-[1120px] items-center justify-between gap-4 px-6 py-[13px]">
-        {/* Logo */}
+        {/* Logo (PNG wordmark — the SVG variant draws with a non-embedded font) */}
         <Link
           href="/"
-          className="flex flex-none items-center gap-[9px] no-underline"
+          className="flex flex-none items-center no-underline"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-accent text-[15px] font-bold text-on-accent">
-            {"{ }"}
-          </span>
-          <span className="text-[17px] font-extrabold tracking-[-.02em] text-text">
-            devnote
-          </span>
+          <Image
+            src="/logo.png"
+            alt={SITE_NAME}
+            width={64}
+            height={28}
+            priority
+            className="logo-light"
+          />
+          <Image
+            src="/logo-vang.png"
+            alt={SITE_NAME}
+            width={64}
+            height={28}
+            priority
+            className="logo-dark"
+          />
         </Link>
 
         {/* Desktop search */}
@@ -36,19 +46,7 @@ export function Header() {
           role="search"
           className="relative hidden max-w-[420px] flex-1 md:block"
         >
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[15px] text-faint"
-          >
-            ⌕
-          </span>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("header.searchPlaceholder")}
-            aria-label={t("header.search")}
-            className="field py-[9px] pl-[33px] pr-[14px] text-sm"
-          />
+          <SearchBox />
         </div>
 
         {/* Actions */}
@@ -85,17 +83,13 @@ export function Header() {
             role="search"
             className="absolute inset-0 z-[6] flex items-center gap-2 bg-[var(--header-bg)] px-6 backdrop-blur-[10px] backdrop-saturate-[140%] animate-fade-up"
           >
-            <span aria-hidden="true" className="flex-none text-[19px] text-faint">
-              ⌕
-            </span>
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("header.searchPlaceholder")}
-              aria-label={t("header.search")}
-              className="field flex-1 px-3 py-[10px] text-[15px]"
-            />
+            <div className="relative flex-1">
+              <SearchBox
+                large
+                autoFocus
+                onNavigate={() => setSearchExpanded(false)}
+              />
+            </div>
             <button
               onClick={() => setSearchExpanded(false)}
               aria-label={t("common.cancel")}

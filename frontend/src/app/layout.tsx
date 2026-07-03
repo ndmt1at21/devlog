@@ -5,7 +5,6 @@ import "./globals.css";
 import { GoogleAdManager } from "@/components/ads/GoogleAdManager";
 import { ThemeProvider, themeInitScript } from "@/components/theme/ThemeProvider";
 import { AuthProvider } from "@/lib/auth";
-import { SearchProvider } from "@/lib/search";
 import { CoffeeProvider } from "@/components/coffee/CoffeeModal";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -32,13 +31,20 @@ export async function generateMetadata(): Promise<Metadata> {
     ),
     title: {
       default: t("meta.titleDefault"),
-      template: "%s · devnote",
+      template: `%s · ${SITE_NAME}`,
     },
     description: t("meta.description"),
     alternates: { canonical: "/" },
+    icons: {
+      icon: [
+        { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+        { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+      ],
+      apple: "/apple-touch-icon.png",
+    },
     openGraph: {
       type: "website",
-      siteName: "devnote",
+      siteName: SITE_NAME,
       locale: locale === "en" ? "en_US" : "vi_VN",
     },
     twitter: {
@@ -85,14 +91,12 @@ export default async function RootLayout({
         <LocaleProvider initialLocale={locale}>
           <ThemeProvider>
             <AuthProvider initial={me}>
-              <SearchProvider>
-                <CoffeeProvider>
-                  <Header />
-                  <main>{children}</main>
-                  <Footer />
-                  <ScrollProgress />
-                </CoffeeProvider>
-              </SearchProvider>
+              <CoffeeProvider>
+                <Header />
+                <main>{children}</main>
+                <Footer />
+                <ScrollProgress />
+              </CoffeeProvider>
             </AuthProvider>
           </ThemeProvider>
         </LocaleProvider>

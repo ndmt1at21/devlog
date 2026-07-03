@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import type { ArticleDetail, Comment } from "@/lib/types";
+import type { ArticleDetail, Comment, ReactionStatus } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
 import { useT } from "@/lib/i18n/provider";
 import { track } from "@/lib/analytics";
@@ -12,6 +12,8 @@ import { TagList } from "./TagList";
 import { SeriesBox } from "./SeriesBox";
 import { Paywall } from "./Paywall";
 import { SeriesNav } from "./SeriesNav";
+import { ShareBar } from "./ShareBar";
+import { ReactionBar } from "./ReactionBar";
 import { Comments } from "./Comments";
 import { ScrollDepthTracker } from "@/components/analytics/ScrollDepthTracker";
 
@@ -22,9 +24,11 @@ const AD_INDEX = 3;
 export function ArticleView({
   detail,
   initialComments,
+  initialReactions,
 }: {
   detail: ArticleDetail;
   initialComments: Comment[];
+  initialReactions: ReactionStatus;
 }) {
   const { premium } = useAuth();
   const t = useT();
@@ -80,7 +84,9 @@ export function ArticleView({
         </span>
       </div>
 
-      <div className="text-[19px] leading-[1.85] text-body">
+      {/* break-words (inherited) keeps long URLs/identifiers from overflowing
+          the measure on small screens; pre/code are unaffected (nowrap). */}
+      <div className="break-words text-[19px] leading-[1.85] text-body">
         {detail.body.map((block, i) => (
           <div key={i}>
             <BlockView block={block} slug={detail.slug} />
@@ -92,6 +98,16 @@ export function ArticleView({
       {detail.locked && (
         <Paywall slug={detail.slug} seriesSlug={detail.series} />
       )}
+
+      {/* Action bar: like/save on the left, share cluster on the right. */}
+      <div className="mt-12 flex flex-wrap items-center justify-between gap-x-6 gap-y-4 border-t border-border pt-7">
+        <ReactionBar slug={detail.slug} initial={initialReactions} />
+        <ShareBar
+          slug={detail.slug}
+          title={detail.title}
+          excerpt={detail.excerpt}
+        />
+      </div>
 
       {detail.inSeries && (
         <SeriesNav

@@ -93,18 +93,21 @@ func (r *articleRepo) GetBySlug(ctx context.Context, slug string) (domain.Articl
 	return a, nil
 }
 
-func (r *articleRepo) Featured(ctx context.Context) (domain.Article, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT "+articleSummaryCols+" FROM articles WHERE featured = TRUE ORDER BY ord LIMIT 1")
-	a, err := scanArticleSummary(row)
-	if err == nil {
-		return a, nil
+func (r *articleRepo) Featured(ctx context.Context) ([]domain.Article, error) {
+	rows, err := r.db.QueryContext(ctx, "SELECT "+articleSummaryCols+" FROM articles WHERE featured = TRUE ORDER BY ord")
+	if err != nil {
+		return nil, mapError(err)
 	}
-	if mapError(err) != domain.ErrNotFound {
-		return domain.Article{}, mapError(err)
+	defer rows.Close()
+	var out []domain.Article
+	for rows.Next() {
+		a, err := scanArticleSummary(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
 	}
-	row = r.db.QueryRowContext(ctx, "SELECT "+articleSummaryCols+" FROM articles ORDER BY ord LIMIT 1")
-	a, err = scanArticleSummary(row)
-	return a, mapError(err)
+	return out, rows.Err()
 }
 
 func (r *articleRepo) Categories(ctx context.Context) ([]string, error) {

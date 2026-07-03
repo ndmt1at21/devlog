@@ -5,7 +5,13 @@ import type { ArticleSummary } from "@/lib/types";
 import { track } from "@/lib/analytics";
 import { useT } from "@/lib/i18n/provider";
 
-export function FeaturedCard({ article }: { article: ArticleSummary }) {
+export function FeaturedCard({
+  article,
+  position = 0,
+}: {
+  article: ArticleSummary;
+  position?: number;
+}) {
   const t = useT();
   return (
     <Link
@@ -16,7 +22,7 @@ export function FeaturedCard({ article }: { article: ArticleSummary }) {
           title: article.title,
           category: article.category,
           list: "featured",
-          position: 0,
+          position,
         })
       }
       className="grid grid-cols-1 gap-0 overflow-hidden rounded-[18px] border border-border bg-surface p-3.5 no-underline transition-all hover:border-hover hover:shadow-[0_14px_40px_-22px_rgba(0,0,0,.22)] md:grid-cols-[1.15fr_1fr]"

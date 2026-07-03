@@ -5,10 +5,17 @@ import {
 } from "@/lib/server-api";
 import { HomeContent } from "@/components/home/HomeContent";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const { q } = await searchParams;
+  const query = q?.trim() ?? "";
+
   const [featured, articles, categories] = await Promise.all([
     fetchFeatured(),
-    fetchArticles(),
+    fetchArticles(query ? { q: query } : undefined),
     fetchCategories(),
   ]);
 
@@ -17,6 +24,7 @@ export default async function Home() {
       featured={featured}
       articles={articles}
       categories={categories}
+      query={query}
     />
   );
 }

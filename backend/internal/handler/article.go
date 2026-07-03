@@ -101,17 +101,19 @@ func (a *API) listArticles(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusOK, out)
 }
 
+// featuredArticle returns every featured article (possibly empty) so the
+// homepage can pin multiple heroes above the category filter.
 func (a *API) featuredArticle(w http.ResponseWriter, r *http.Request) {
-	art, err := a.Store.Articles().Featured(r.Context())
-	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, r, apierr.ErrFeaturedNotFound)
-		return
-	}
+	arts, err := a.Store.Articles().Featured(r.Context())
 	if err != nil {
 		writeError(w, r, apierr.ErrArticleLoad.WithMessage("Không tải được bài viết nổi bật."))
 		return
 	}
-	writeJSON(w, r, http.StatusOK, toSummary(art))
+	out := make([]articleSummary, 0, len(arts))
+	for _, x := range arts {
+		out = append(out, toSummary(x))
+	}
+	writeJSON(w, r, http.StatusOK, out)
 }
 
 func (a *API) categories(w http.ResponseWriter, r *http.Request) {

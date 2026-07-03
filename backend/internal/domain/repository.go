@@ -9,8 +9,9 @@ type ArticleRepository interface {
 	List(ctx context.Context, f ArticleFilter) ([]Article, error)
 	// GetBySlug returns a single article including its Body.
 	GetBySlug(ctx context.Context, slug string) (Article, error)
-	// Featured returns the single featured article.
-	Featured(ctx context.Context) (Article, error)
+	// Featured returns all featured articles (summaries) ordered by Ord
+	// ascending; empty when none are flagged.
+	Featured(ctx context.Context) ([]Article, error)
 	// Categories returns distinct category names ordered by first appearance.
 	Categories(ctx context.Context) ([]string, error)
 	// SeriesParts returns the ordered parts (by Part asc) of a series.
@@ -29,6 +30,19 @@ type SeriesRepository interface {
 type CommentRepository interface {
 	ListByArticle(ctx context.Context, slug string) ([]Comment, error)
 	Create(ctx context.Context, c Comment) (Comment, error)
+}
+
+// ReactionRepository stores per-user article reactions (likes and bookmarks).
+type ReactionRepository interface {
+	// Set adds (on=true) or removes (on=false) the user's reaction of the given
+	// kind on an article. Re-setting an existing state is a no-op.
+	Set(ctx context.Context, kind ReactionKind, slug, userID string, on bool) error
+	// Status returns the article's like count plus the user's own reaction
+	// state. userID may be "" (anonymous): Liked/Bookmarked are then false.
+	Status(ctx context.Context, slug, userID string) (ReactionStatus, error)
+	// BookmarkedSlugs returns the article slugs the user bookmarked, most
+	// recently saved first.
+	BookmarkedSlugs(ctx context.Context, userID string) ([]string, error)
 }
 
 // SubscriptionRepository stores demo Pro memberships.
@@ -51,6 +65,7 @@ type Store interface {
 	Articles() ArticleRepository
 	Series() SeriesRepository
 	Comments() CommentRepository
+	Reactions() ReactionRepository
 	Subscriptions() SubscriptionRepository
 	CoffeeOrders() CoffeeOrderRepository
 	// Ping verifies the backing store is reachable.

@@ -1,0 +1,147 @@
+name: Deploy
+
+# Continuous deployment: every push to main that touches the backend is tested,
+# built into a Docker image, pushed to GHCR, and rolled out to the VPS.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "deployments/docker-compose.prod.yml"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch: {}
+
+# Never let two deploys race on the VPS.
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/devlog-backend
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race -count=1 ./...
+
+  build-and-push:
+    name: Build & push image
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.img.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image tag
+        id: img
+        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ steps.img.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to VPS
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    # These are Environment secrets under the `PROD` environment, so the job must
+    # opt into it — otherwise VPS_HOST/VPS_SSH_KEY/... resolve to empty.
+    environment: PROD
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy compose file to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          source: deployments/docker-compose.prod.yml
+          target: ${{ secrets.DEPLOY_PATH }}
+          strip_components: 1
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          TAG: ${{ needs.build-and-push.outputs.tag }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          HOST_PORT: ${{ secrets.HOST_PORT || '8080' }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          envs: TAG,GHCR_USER,GHCR_TOKEN,DEPLOY_PATH,HOST_PORT
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd "$DEPLOY_PATH"
+
+            # Authenticate to GHCR with the workflow's short-lived token, pull the
+            # freshly-built image, and roll it out. TAG/HOST_PORT are read by the
+            # compose file via variable interpolation.
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            # TAG/HOST_PORT are read by compose interpolation. DB_DSN lives in
+            # backend.env on the VPS (env_file), not injected from a secret.
+            export TAG HOST_PORT
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker logout ghcr.io
+            docker image prune -f
+
+            # Smoke test: fail the deploy if the new container isn't healthy.
+            echo "Waiting for /api/v1/health ..."
+            for i in $(seq 1 30); do
+              if curl -fsS "http://127.0.0.1:${HOST_PORT}/api/v1/health" >/dev/null 2>&1; then
+                echo "Backend is healthy."
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "Health check failed — dumping recent logs:" >&2
+            docker compose -f docker-compose.prod.yml logs --tail=80 backend >&2
+            exit 1

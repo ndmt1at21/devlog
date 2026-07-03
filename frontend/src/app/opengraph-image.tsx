@@ -4,7 +4,7 @@ import { SITE_NAME } from "@/lib/seo";
 // Branded default social-share card (Open Graph + Twitter). Next serves this for
 // any page that doesn't provide its own image, and `absoluteUrl("/opengraph-image")`
 // is reused as the Organization logo in JSON-LD.
-export const alt = "devnote — nhật ký lập trình";
+export const alt = "jamti — nhật ký lập trình";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -18,9 +18,9 @@ export default function OgImage() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          background: "#18191b",
+          background: "#2A2117",
           padding: "72px 80px",
-          color: "#fbfbfa",
+          color: "#FFFDF6",
           fontFamily: "sans-serif",
         }}
       >
@@ -30,16 +30,16 @@ export default function OgImage() {
               width: 64,
               height: 64,
               borderRadius: 16,
-              background: "#f5c700",
-              color: "#2c2300",
+              background: "#FFC531",
+              color: "#4A3512",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 40,
+              fontSize: 44,
               fontWeight: 800,
             }}
           >
-            {"</>"}
+            j
           </div>
           <div style={{ fontSize: 40, fontWeight: 700 }}>{SITE_NAME}</div>
         </div>
@@ -58,8 +58,8 @@ export default function OgImage() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ width: 40, height: 6, background: "#f5c700" }} />
-          <div style={{ fontSize: 30, color: "#a3a7ac" }}>
+          <div style={{ width: 40, height: 6, background: "#FFC531" }} />
+          <div style={{ fontSize: 30, color: "#c9bfae" }}>
             Blog & series về lập trình
           </div>
         </div>

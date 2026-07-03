@@ -11,13 +11,13 @@ export function BlockView({ block, slug }: { block: Block; slug: string }) {
   switch (block.type) {
     case "h":
       return (
-        <h2 className="mb-2.5 mt-11 text-[25px] font-bold leading-[1.3] tracking-[-.02em] text-text">
+        <h2 className="mb-2.5 mt-11 text-[25px] font-bold leading-[1.3] tracking-[-.02em] text-balance text-text">
           {renderInline(block.text ?? "")}
         </h2>
       );
     case "quote":
       return (
-        <blockquote className="my-[30px] border-l-[3px] border-accent py-1.5 pl-[22px] text-[20px] font-medium leading-[1.6] text-c3a">
+        <blockquote className="my-[30px] border-l-[3px] border-accent py-1.5 pl-[22px] text-[20px] font-medium leading-[1.6] text-pretty text-c3a">
           {renderInline(block.text ?? "")}
         </blockquote>
       );
@@ -48,6 +48,13 @@ export function BlockView({ block, slug }: { block: Block; slug: string }) {
     }
     case "p":
     default:
-      return <p className="mb-[22px]">{renderInline(block.text ?? "")}</p>;
+      // Justified from sm: up only — on narrow phones (~7 syllables/line)
+      // justify gaps get too wide without Vietnamese hyphenation, so mobile
+      // stays left-aligned. The last line stays left (browser default).
+      return (
+        <p className="mb-[22px] text-pretty sm:text-justify">
+          {renderInline(block.text ?? "")}
+        </p>
+      );
   }
 }

@@ -74,7 +74,7 @@ sum(2, "3"); // Error: Argument of type "string" is
 			},
 		},
 		{
-			Slug: "react-perf", Ord: 2, Category: "Frontend", Author: "Linh Trần",
+			Slug: "react-perf", Ord: 2, Featured: true, Category: "Frontend", Author: "Linh Trần",
 			ReadTime: "7 phút đọc", PublishedAt: d(2026, 6, 18),
 			Title:   "Tối ưu hiệu năng React với useMemo và useCallback",
 			Excerpt: "Memoization đúng cách — và lý do bạn không nên lạm dụng useMemo cho mọi thứ.",

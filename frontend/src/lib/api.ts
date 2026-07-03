@@ -4,10 +4,12 @@
 // unwraps `data` on success (code 0) and throws a translated ApiError otherwise.
 import type {
   ArticleDetail,
+  ArticleSummary,
   Comment,
   MeResponse,
   NewArticleInput,
   Plan,
+  ReactionStatus,
   SubscriptionState,
 } from "./types";
 import { translateError } from "./errorCodes";
@@ -70,6 +72,10 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  // --- search ---
+  searchArticles: (q: string) =>
+    request<ArticleSummary[]>(`/articles?q=${encodeURIComponent(q)}`),
+
   // --- comments ---
   listComments: (slug: string) =>
     request<Comment[]>(`/articles/${encodeURIComponent(slug)}/comments`),
@@ -78,6 +84,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  // --- reactions (like / bookmark) ---
+  reactions: (slug: string) =>
+    request<ReactionStatus>(`/articles/${encodeURIComponent(slug)}/reactions`),
+  setReaction: (slug: string, kind: "like" | "bookmark", on: boolean) =>
+    request<ReactionStatus>(
+      `/articles/${encodeURIComponent(slug)}/reactions/${kind}`,
+      { method: on ? "PUT" : "DELETE" },
+    ),
 
   // --- auth ---
   me: () => request<MeResponse>("/auth/me"),
