@@ -102,6 +102,21 @@ jobs:
           target: ${{ secrets.DEPLOY_PATH }}
           strip_components: 1
 
+      # backend.env is managed as the PROD environment secret BACKEND_ENV_FILE
+      # (the full file content, see deployments/backend.env.example). Base64
+      # keeps the multiline value intact across the SSH env hand-off; the
+      # runner masks encoded secret variants in logs.
+      - name: Encode backend.env secret
+        id: envfile
+        env:
+          BACKEND_ENV_FILE: ${{ secrets.BACKEND_ENV_FILE }}
+        run: |
+          if [ -n "$BACKEND_ENV_FILE" ]; then
+            echo "b64=$(printf '%s\n' "$BACKEND_ENV_FILE" | base64 -w0)" >> "$GITHUB_OUTPUT"
+          else
+            echo "BACKEND_ENV_FILE secret not set — keeping the backend.env already on the VPS."
+          fi
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         env:
@@ -110,23 +125,31 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           HOST_PORT: ${{ secrets.HOST_PORT || '8080' }}
+          BACKEND_ENV_B64: ${{ steps.envfile.outputs.b64 }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          envs: TAG,GHCR_USER,GHCR_TOKEN,DEPLOY_PATH,HOST_PORT
+          envs: TAG,GHCR_USER,GHCR_TOKEN,DEPLOY_PATH,HOST_PORT,BACKEND_ENV_B64
           script_stop: true
           script: |
             set -euo pipefail
             cd "$DEPLOY_PATH"
 
+            # Refresh backend.env from the repo secret when provided; an unset
+            # secret leaves the file on the VPS untouched (manual management).
+            if [ -n "${BACKEND_ENV_B64:-}" ]; then
+              umask 077
+              printf '%s' "$BACKEND_ENV_B64" | base64 -d > backend.env.tmp
+              mv backend.env.tmp backend.env
+              echo "backend.env refreshed from BACKEND_ENV_FILE secret."
+            fi
+
             # Authenticate to GHCR with the workflow's short-lived token, pull the
             # freshly-built image, and roll it out. TAG/HOST_PORT are read by the
             # compose file via variable interpolation.
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-            # TAG/HOST_PORT are read by compose interpolation. DB_DSN lives in
-            # backend.env on the VPS (env_file), not injected from a secret.
             export TAG HOST_PORT
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans

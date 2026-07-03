@@ -36,6 +36,8 @@ func (a *API) NewRouter() http.Handler {
 	mux.HandleFunc("GET "+apiV1+"/articles", a.listArticles)
 	// Publishing requires a session + the IAM "articles:create" permission.
 	mux.HandleFunc("POST "+apiV1+"/articles", a.createArticle)
+	// Presigned direct-to-bucket image upload for authors (same gate as above).
+	mux.HandleFunc("POST "+apiV1+"/uploads", a.createUpload)
 	mux.HandleFunc("GET "+apiV1+"/articles/featured", a.featuredArticle)
 	mux.HandleFunc("GET "+apiV1+"/categories", a.categories)
 	mux.HandleFunc("GET "+apiV1+"/articles/{slug}", a.getArticle)

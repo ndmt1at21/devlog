@@ -1,6 +1,14 @@
 // API response types — mirror the Go backend DTOs (backend/internal/handler).
 
-export type BlockType = "p" | "h" | "quote" | "code" | "diagram" | "list" | "ad";
+export type BlockType =
+  | "p"
+  | "h"
+  | "quote"
+  | "code"
+  | "diagram"
+  | "list"
+  | "img"
+  | "ad";
 
 export interface Block {
   type: BlockType;
@@ -12,8 +20,18 @@ export interface Block {
   /** List items for `list` blocks; may carry inline markdown spans. */
   items?: string[];
   ordered?: boolean;
+  /** Image URL for `img` blocks (must live under the public image origin). */
+  src?: string;
+  /** Alternative text for `img` blocks. */
+  alt?: string;
   /** Server-rendered Shiki HTML for `code` blocks (added during SSR). */
   html?: string;
+}
+
+/** Response of POST /uploads: PUT the bytes to uploadUrl, embed publicUrl. */
+export interface UploadTicket {
+  uploadUrl: string;
+  publicUrl: string;
 }
 
 /** Payload for POST /articles. Body is either markdown source or editor blocks. */

@@ -64,6 +64,12 @@ var (
 	ErrCategoryList     = def(3004, http.StatusInternalServerError, "Không tải được danh mục.")
 	ErrArticleForbidden = def(3005, http.StatusForbidden, "Bạn không có quyền tạo bài viết.")
 	ErrArticleCreate    = def(3006, http.StatusInternalServerError, "Không tạo được bài viết.")
+	// Image uploads (presigned direct-to-bucket).
+	ErrUploadNotConfigured = def(3007, http.StatusServiceUnavailable, "Tải ảnh chưa được cấu hình.")
+	ErrUploadType          = def(3008, http.StatusBadRequest, "Chỉ hỗ trợ ảnh JPEG, PNG, WebP, GIF hoặc AVIF.")
+	ErrUploadTooLarge      = def(3009, http.StatusBadRequest, "Ảnh tối đa 5 MB.")
+	ErrUploadCreate        = def(3010, http.StatusInternalServerError, "Không tạo được liên kết tải ảnh.")
+	ErrImageHost           = def(3011, http.StatusBadRequest, "Ảnh trong bài phải được tải lên từ trình soạn thảo.")
 
 	// --- comments (4xxx) ---
 	ErrCommentList   = def(4000, http.StatusInternalServerError, "Không tải được bình luận.")

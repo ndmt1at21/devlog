@@ -14,11 +14,18 @@ import { useAuth } from "@/lib/auth";
 import { useT } from "@/lib/i18n/provider";
 import { track } from "@/lib/analytics";
 import { blocksFromMarkdown } from "@/lib/markdown";
+import {
+  IMAGE_ACCEPT,
+  IMAGE_TYPES,
+  MAX_IMAGE_BYTES,
+  baseName,
+  uploadImage,
+} from "@/lib/uploads";
 import type { Block, NewArticleInput } from "@/lib/types";
 import { BlockView } from "@/components/article/BlockRenderer";
 
 type Mode = "markdown" | "blocks";
-type EditorBlockType = "p" | "h" | "quote" | "code" | "diagram" | "list";
+type EditorBlockType = "p" | "h" | "quote" | "code" | "diagram" | "list" | "img";
 
 // One row of the rich-text editor. `lines` holds diagram steps / list items,
 // one per line; only the fields relevant to `type` are sent.
@@ -31,6 +38,10 @@ interface EditorBlock {
   caption: string;
   lines: string;
   ordered: boolean;
+  src: string;
+  alt: string;
+  /** True while this row's image is being uploaded to the bucket. */
+  uploading: boolean;
 }
 
 let nextId = 1;
@@ -43,6 +54,9 @@ const newBlock = (type: EditorBlockType = "p"): EditorBlock => ({
   caption: "",
   lines: "",
   ordered: false,
+  src: "",
+  alt: "",
+  uploading: false,
 });
 
 const splitLines = (s: string) =>
@@ -58,6 +72,15 @@ function toBlocks(rows: EditorBlock[]): Block[] {
       case "code":
         if (b.code.trim())
           out.push({ type: "code", lang: b.lang.trim(), code: b.code });
+        break;
+      case "img":
+        if (b.src)
+          out.push({
+            type: "img",
+            src: b.src,
+            alt: b.alt.trim(),
+            caption: b.caption.trim(),
+          });
         break;
       case "diagram": {
         const steps = splitLines(b.lines);
@@ -96,6 +119,8 @@ export function NewArticleForm() {
   const [preview, setPreview] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // True while the markdown-mode toolbar upload is in flight.
+  const [mdUploading, setMdUploading] = useState(false);
 
   // Last-focused text field, so the inline-format toolbar knows its target.
   const activeField = useRef<HTMLTextAreaElement | null>(null);
@@ -148,6 +173,68 @@ export function NewArticleForm() {
 
   const remove = (id: number) =>
     setRows((rs) => (rs.length > 1 ? rs.filter((r) => r.id !== id) : rs));
+
+  // Client-side mirror of the backend's upload limits; returns "" when valid.
+  const validateImage = (file: File) => {
+    if (!IMAGE_TYPES.includes(file.type)) return t("editor.errImageType");
+    if (file.size > MAX_IMAGE_BYTES) return t("editor.errImageSize");
+    return "";
+  };
+
+  const uploadError = (err: unknown) =>
+    setError(err instanceof ApiError ? err.message : t("editor.errUpload"));
+
+  // Markdown mode: upload, then splice a standalone ![alt](url) line at the
+  // caret of the markdown field (or append when it wasn't focused).
+  const insertMarkdownImage = async (file: File) => {
+    const invalid = validateImage(file);
+    if (invalid) return setError(invalid);
+    setError("");
+    setMdUploading(true);
+    try {
+      const url = await uploadImage(file);
+      const snippet = `![${baseName(file.name)}](${url})`;
+      const el = activeField.current;
+      if (el && el.dataset.target === "md") {
+        const start = el.selectionStart ?? el.value.length;
+        const end = el.selectionEnd ?? start;
+        const next = `${el.value.slice(0, start)}\n\n${snippet}\n\n${el.value.slice(end)}`;
+        setMarkdown(next);
+        const caret = start + snippet.length + 4;
+        requestAnimationFrame(() => {
+          el.focus();
+          el.setSelectionRange(caret, caret);
+        });
+      } else {
+        setMarkdown((md) => (md.trim() ? `${md.trimEnd()}\n\n${snippet}\n` : `${snippet}\n`));
+      }
+    } catch (err) {
+      uploadError(err);
+    } finally {
+      setMdUploading(false);
+    }
+  };
+
+  // Blocks mode: upload for one img row, defaulting alt to the file name.
+  const uploadRowImage = async (id: number, file: File) => {
+    const invalid = validateImage(file);
+    if (invalid) return setError(invalid);
+    setError("");
+    update(id, { uploading: true });
+    try {
+      const url = await uploadImage(file);
+      setRows((rs) =>
+        rs.map((r) =>
+          r.id === id
+            ? { ...r, uploading: false, src: url, alt: r.alt || baseName(file.name) }
+            : r,
+        ),
+      );
+    } catch (err) {
+      update(id, { uploading: false });
+      uploadError(err);
+    }
+  };
 
   // Wrap the selection of the last-focused textarea in inline markers. State is
   // updated through the field's data-target key so React stays the source of
@@ -332,6 +419,30 @@ export function NewArticleForm() {
               <ToolbarBtn label={t("editor.link")} onApply={() => applyInline("[", "](https://)")}>
                 🔗
               </ToolbarBtn>
+              {mode === "markdown" && (
+                <label
+                  aria-label={t("editor.insertImage")}
+                  title={t("editor.insertImage")}
+                  aria-busy={mdUploading}
+                  onMouseDown={(e) => e.preventDefault()}
+                  className={`flex h-8 w-8 items-center justify-center rounded-[7px] border border-border2 text-[13px] text-c5b transition-colors hover:border-hover hover:text-strong ${
+                    mdUploading ? "cursor-wait opacity-50" : "cursor-pointer"
+                  }`}
+                >
+                  🖼️
+                  <input
+                    type="file"
+                    accept={IMAGE_ACCEPT}
+                    disabled={mdUploading}
+                    className="sr-only"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) void insertMarkdownImage(file);
+                    }}
+                  />
+                </label>
+              )}
             </div>
           )}
         </div>
@@ -380,6 +491,7 @@ export function NewArticleForm() {
                     onUpdate={update}
                     onMove={move}
                     onRemove={remove}
+                    onUploadImage={uploadRowImage}
                     focusProps={focusProps}
                   />
                 ))}
@@ -465,6 +577,7 @@ function BlockRow({
   onUpdate,
   onMove,
   onRemove,
+  onUploadImage,
   focusProps,
 }: {
   row: EditorBlock;
@@ -473,6 +586,7 @@ function BlockRow({
   onUpdate: (id: number, patch: Partial<EditorBlock>) => void;
   onMove: (id: number, dir: -1 | 1) => void;
   onRemove: (id: number) => void;
+  onUploadImage: (id: number, file: File) => void;
   focusProps: {
     onFocus: (e: React.FocusEvent<HTMLTextAreaElement>) => void;
   };
@@ -486,6 +600,7 @@ function BlockRow({
     { value: "code", label: t("editor.blockCode") },
     { value: "diagram", label: t("editor.blockDiagram") },
     { value: "list", label: t("editor.blockList") },
+    { value: "img", label: t("editor.blockImg") },
   ];
 
   return (
@@ -574,6 +689,65 @@ function BlockRow({
             placeholder={t("editor.codePlaceholder")}
             className={`${fieldCls} resize-y font-mono text-[13px] leading-[1.7]`}
             spellCheck={false}
+          />
+        </>
+      )}
+
+      {row.type === "img" && (
+        <>
+          {row.src && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={row.src}
+              alt={row.alt}
+              className="mb-2.5 max-h-[240px] rounded-[10px] border border-border"
+            />
+          )}
+          <label
+            aria-busy={row.uploading}
+            className={`inline-flex items-center gap-2 rounded-[9px] border border-border2 px-4 py-2 text-[13.5px] font-semibold text-c5b transition-colors hover:border-hover hover:text-strong ${
+              row.uploading ? "cursor-wait opacity-60" : "cursor-pointer"
+            }`}
+          >
+            {row.uploading
+              ? t("editor.uploading")
+              : row.src
+                ? t("editor.replaceImage")
+                : t("editor.uploadImage")}
+            <span className="sr-only">{t("editor.imageLabel", n)}</span>
+            <input
+              type="file"
+              accept={IMAGE_ACCEPT}
+              disabled={row.uploading}
+              className="sr-only"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) onUploadImage(row.id, file);
+              }}
+            />
+          </label>
+          <label htmlFor={`blk-alt-${row.id}`} className="sr-only">
+            {t("editor.altLabel", n)}
+          </label>
+          <input
+            id={`blk-alt-${row.id}`}
+            value={row.alt}
+            maxLength={300}
+            onChange={(e) => onUpdate(row.id, { alt: e.target.value })}
+            placeholder={t("editor.altPlaceholder")}
+            className={`${fieldCls} mt-2`}
+          />
+          <label htmlFor={`blk-imgcap-${row.id}`} className="sr-only">
+            {t("editor.imgCaptionLabel", n)}
+          </label>
+          <input
+            id={`blk-imgcap-${row.id}`}
+            value={row.caption}
+            maxLength={300}
+            onChange={(e) => onUpdate(row.id, { caption: e.target.value })}
+            placeholder={t("editor.captionPlaceholder")}
+            className={`${fieldCls} mt-2`}
           />
         </>
       )}

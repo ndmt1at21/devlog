@@ -3,10 +3,10 @@ package domain
 import "time"
 
 // Block is a single piece of article body content. Type is one of:
-// "p" (paragraph), "h" (heading), "code", "diagram", "quote", "list". The "ad"
-// block type is synthesized on the frontend, never stored. Text-bearing fields
-// (Text, Items) may carry inline markdown spans (**b**, *i*, `c`, [t](url))
-// which the frontend renders safely as React elements.
+// "p" (paragraph), "h" (heading), "code", "diagram", "quote", "list", "img".
+// The "ad" block type is synthesized on the frontend, never stored.
+// Text-bearing fields (Text, Items) may carry inline markdown spans (**b**,
+// *i*, `c`, [t](url)) which the frontend renders safely as React elements.
 type Block struct {
 	Type    string   `json:"type"`
 	Text    string   `json:"text,omitempty"`
@@ -16,6 +16,10 @@ type Block struct {
 	Steps   []string `json:"steps,omitempty"`
 	Items   []string `json:"items,omitempty"`
 	Ordered bool     `json:"ordered,omitempty"`
+	// Src/Alt describe an "img" block: Src is the image URL (must point at the
+	// configured public image origin), Alt the accessibility description.
+	Src string `json:"src,omitempty"`
+	Alt string `json:"alt,omitempty"`
 }
 
 // Series groups multi-part articles. Parts are derived from Article.Part.

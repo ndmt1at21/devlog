@@ -41,6 +41,18 @@ type Config struct {
 	MomoSecretKey      string
 	MomoCreateEndpoint string
 	MomoQueryEndpoint  string
+
+	// Object storage for article images: any S3-compatible store (Cloudflare R2
+	// in production, MinIO for local dev). Incomplete settings disable uploads.
+	S3Endpoint        string // https://<account_id>.r2.cloudflarestorage.com
+	S3Bucket          string
+	S3Region          string // "auto" on R2
+	S3AccessKeyID     string
+	S3SecretAccessKey string
+	// ImageBaseURL is the public origin the bucket is served from (R2 custom
+	// domain behind Cloudflare's CDN, e.g. https://img.example.com). It prefixes
+	// every stored image URL, and article bodies may only embed images under it.
+	ImageBaseURL string
 }
 
 // Load reads configuration from the environment, applying sensible dev defaults.
@@ -66,6 +78,13 @@ func Load() (Config, error) {
 		MomoSecretKey:      os.Getenv("MOMO_SECRET_KEY"),
 		MomoCreateEndpoint: env("MOMO_CREATE_ENDPOINT", "https://test-payment.momo.vn/v3/gateway/api/create"),
 		MomoQueryEndpoint:  env("MOMO_QUERY_ENDPOINT", "https://test-payment.momo.vn/v3/gateway/api/query"),
+
+		S3Endpoint:        strings.TrimRight(os.Getenv("S3_ENDPOINT"), "/"),
+		S3Bucket:          os.Getenv("S3_BUCKET"),
+		S3Region:          env("S3_REGION", "auto"),
+		S3AccessKeyID:     os.Getenv("S3_ACCESS_KEY_ID"),
+		S3SecretAccessKey: os.Getenv("S3_SECRET_ACCESS_KEY"),
+		ImageBaseURL:      strings.TrimRight(os.Getenv("IMAGE_BASE_URL"), "/"),
 	}
 
 	switch c.DBDriver {
@@ -93,6 +112,13 @@ func (c Config) StripeEnabled() bool { return c.StripeSecretKey != "" }
 // MoMo method falls back to the demo flow.
 func (c Config) MomoEnabled() bool {
 	return c.MomoPartnerCode != "" && c.MomoAccessKey != "" && c.MomoSecretKey != ""
+}
+
+// UploadsEnabled reports whether image uploads are fully configured. When
+// false, POST /uploads answers 503 and the editor surfaces the error.
+func (c Config) UploadsEnabled() bool {
+	return c.S3Endpoint != "" && c.S3Bucket != "" && c.S3AccessKeyID != "" &&
+		c.S3SecretAccessKey != "" && c.ImageBaseURL != ""
 }
 
 func env(key, def string) string {

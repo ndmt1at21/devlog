@@ -11,6 +11,7 @@ import type {
   Plan,
   ReactionStatus,
   SubscriptionState,
+  UploadTicket,
 } from "./types";
 import { translateError } from "./errorCodes";
 
@@ -68,6 +69,13 @@ export const api = {
   // --- articles ---
   createArticle: (body: NewArticleInput) =>
     request<ArticleDetail>("/articles", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  // --- image uploads (presigned direct-to-bucket PUT) ---
+  createUpload: (body: { type: string; size: number }) =>
+    request<UploadTicket>("/uploads", {
       method: "POST",
       body: JSON.stringify(body),
     }),

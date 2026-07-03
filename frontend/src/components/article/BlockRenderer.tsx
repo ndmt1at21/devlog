@@ -32,6 +32,26 @@ export function BlockView({ block, slug }: { block: Block; slug: string }) {
       );
     case "diagram":
       return <Diagram steps={block.steps ?? []} caption={block.caption} />;
+    case "img":
+      return (
+        <figure className="my-[30px]">
+          {/* Plain <img>: bytes come final-form from the image CDN and
+              next/image optimization isn't wired up on the Workers runtime. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={block.src}
+            alt={block.alt ?? ""}
+            loading="lazy"
+            decoding="async"
+            className="w-full rounded-[14px] border border-border"
+          />
+          {block.caption && (
+            <figcaption className="mt-2.5 text-center text-[13.5px] text-muted">
+              {block.caption}
+            </figcaption>
+          )}
+        </figure>
+      );
     case "list": {
       const ListTag = block.ordered ? "ol" : "ul";
       return (

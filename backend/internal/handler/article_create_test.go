@@ -43,10 +43,16 @@ func (f *fakeAuth) CheckPermissions(context.Context, string, []string) (bool, er
 // newAuthedClient boots a server with the fake IAM provider and returns a
 // cookie-carrying client that has already logged in.
 func newAuthedClient(t *testing.T, allow bool) (*httptest.Server, *http.Client) {
+	return newAuthedClientCfg(t, allow, config.Config{DBDriver: "memory"})
+}
+
+// newAuthedClientCfg is newAuthedClient with a caller-supplied config (used by
+// upload tests to toggle the S3 settings).
+func newAuthedClientCfg(t *testing.T, allow bool, cfg config.Config) (*httptest.Server, *http.Client) {
 	t.Helper()
 	api := &handler.API{
 		Store:    memory.New(),
-		Cfg:      config.Config{DBDriver: "memory"},
+		Cfg:      cfg,
 		Auth:     &fakeAuth{allow: allow},
 		Sessions: session.New("test-secret", false),
 	}

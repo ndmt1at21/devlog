@@ -137,6 +137,8 @@ type blockInput struct {
 	Steps   []string `json:"steps"`
 	Items   []string `json:"items"`
 	Ordered bool     `json:"ordered"`
+	Src     string   `json:"src"`
+	Alt     string   `json:"alt"`
 }
 
 type createArticleInput struct {
@@ -212,6 +214,7 @@ func (a *API) createArticle(w http.ResponseWriter, r *http.Request) {
 			raw = append(raw, domain.Block{
 				Type: b.Type, Text: b.Text, Lang: b.Lang, Code: b.Code,
 				Caption: b.Caption, Steps: b.Steps, Items: b.Items, Ordered: b.Ordered,
+				Src: b.Src, Alt: b.Alt,
 			})
 		}
 	default:
@@ -226,6 +229,10 @@ func (a *API) createArticle(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		writeError(w, r, apierr.ErrArticleCreate)
+		return
+	}
+	if err := a.checkImageHosts(body); err != nil {
+		writeError(w, r, err)
 		return
 	}
 
