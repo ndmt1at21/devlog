@@ -1,66 +1,31 @@
-// Google Ad Manager (GPT) configuration. Everything is gated on the network
-// code: with it unset, `gamEnabled` is false and the UI keeps the placeholder
+// Google AdSense configuration. Everything is gated on the publisher (client)
+// id: with it unset, `adsenseEnabled` is false and the UI keeps the placeholder
 // slot — so nothing loads and no requests are made until you provide real IDs.
 
-export const GAM_NETWORK_CODE = process.env.NEXT_PUBLIC_GAM_NETWORK_CODE ?? "";
-export const gamEnabled = GAM_NETWORK_CODE !== "";
+export const ADSENSE_CLIENT = process.env.NEXT_PUBLIC_ADSENSE_CLIENT ?? "";
+export const adsenseEnabled = ADSENSE_CLIENT !== "";
 
-// Logical slot name → GAM ad-unit name (configure these units in your GAM
-// network). The full ad-unit path is `/{networkCode}/{unitName}`.
-const AD_UNIT_NAMES: Record<string, string> = {
-  "in-content": process.env.NEXT_PUBLIC_GAM_AD_UNIT ?? "jamti_in_content",
+// Logical slot name → AdSense ad-unit slot id. Create a display ad unit per slot
+// in your AdSense account; each one gives you the numeric `data-ad-slot` value.
+// Unknown/unconfigured slots return "" and render nothing (placeholder stays).
+const AD_SLOT_IDS: Record<string, string> = {
+  "in-content": process.env.NEXT_PUBLIC_ADSENSE_SLOT ?? "",
 };
 
-export function adUnitPath(slot: string): string {
-  const name = AD_UNIT_NAMES[slot] ?? `jamti_${slot.replace(/-/g, "_")}`;
-  return `/${GAM_NETWORK_CODE}/${name}`;
+export function adSlotId(slot: string): string {
+  return AD_SLOT_IDS[slot] ?? "";
 }
 
-// Design shows a 728×90 leaderboard; 300×250 is the mobile fallback (applied via
-// the size mapping in GamAdSlot). The union of both is the slot's size list.
-export const AD_SIZES: Array<[number, number]> = [
-  [728, 90],
-  [300, 250],
-];
-
-// ---- Minimal Google Publisher Tag typings (only what we use) ----
-
-export interface GptSlot {
-  addService(service: GptPubAdsService): GptSlot;
-  defineSizeMapping(mapping: unknown[]): GptSlot;
-  setCollapseEmptyDiv(collapse: boolean): GptSlot;
+// True when both the publisher id and this slot's ad-unit id are configured.
+export function slotEnabled(slot: string): boolean {
+  return adsenseEnabled && adSlotId(slot) !== "";
 }
 
-interface GptPubAdsService {
-  enableSingleRequest(): void;
-  collapseEmptyDivs(): void;
-  refresh(slots?: GptSlot[]): void;
-}
-
-interface GptSizeMappingBuilder {
-  addSize(
-    viewport: [number, number],
-    sizes: Array<[number, number]>,
-  ): GptSizeMappingBuilder;
-  build(): unknown[] | null;
-}
-
-export interface GoogleTag {
-  cmd: Array<() => void>;
-  defineSlot(
-    path: string,
-    sizes: Array<[number, number]>,
-    divId: string,
-  ): GptSlot | null;
-  pubads(): GptPubAdsService;
-  enableServices(): void;
-  display(divId: string): void;
-  destroySlots(slots?: GptSlot[]): boolean;
-  sizeMapping(): GptSizeMappingBuilder;
-}
+// ---- Minimal adsbygoogle typing (only what we use) ----
 
 declare global {
   interface Window {
-    googletag?: GoogleTag;
+    // Each `push({})` renders the next unrendered <ins class="adsbygoogle">.
+    adsbygoogle?: Array<Record<string, unknown>>;
   }
 }

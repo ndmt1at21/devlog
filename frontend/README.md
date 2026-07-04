@@ -41,8 +41,8 @@ cd ../backend && make run       # DB_DRIVER=memory by default
 | `BACKEND_INTERNAL_URL`        | Go API origin for SSR fetches + `/api/*` rewrite (`:8080`)     |
 | `NEXT_PUBLIC_SITE_URL`        | Public origin for metadata + sitemap                          |
 | `NEXT_PUBLIC_GA_ID`           | GA4 measurement id — omit to disable analytics                |
-| `NEXT_PUBLIC_GAM_NETWORK_CODE`| Google Ad Manager network code — omit to keep the ad placeholder |
-| `NEXT_PUBLIC_GAM_AD_UNIT`     | In-content ad-unit name (default `devnote_in_content`)        |
+| `NEXT_PUBLIC_ADSENSE_CLIENT`  | AdSense publisher id (`ca-pub-…`) — omit to keep the ad placeholder |
+| `NEXT_PUBLIC_ADSENSE_SLOT`    | In-content display ad-unit slot id (numeric)                  |
 
 ## Structure
 

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Be_Vietnam_Pro } from "next/font/google";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import "./globals.css";
-import { GoogleAdManager } from "@/components/ads/GoogleAdManager";
+import { AdSense } from "@/components/ads/AdSense";
 import { ThemeProvider, themeInitScript } from "@/components/theme/ThemeProvider";
 import { AuthProvider } from "@/lib/auth";
 import { CoffeeProvider } from "@/components/coffee/CoffeeModal";
@@ -101,7 +101,7 @@ export default async function RootLayout({
           </ThemeProvider>
         </LocaleProvider>
         {GA_ID ? <GoogleAnalytics gaId={GA_ID} /> : null}
-        <GoogleAdManager />
+        <AdSense />
       </body>
     </html>
   );
