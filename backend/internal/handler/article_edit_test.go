@@ -61,9 +61,10 @@ func TestUpdateArticleAuthorFlow(t *testing.T) {
 		t.Fatalf("edit: status=%d code=%d message=%q, want 200/0", status, env.Code, env.Message)
 	}
 	var updated struct {
-		Slug  string `json:"slug"`
-		Title string `json:"title"`
-		Body  []struct {
+		Slug     string `json:"slug"`
+		Title    string `json:"title"`
+		Editable bool   `json:"editable"`
+		Body     []struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
 		} `json:"body"`
@@ -78,15 +79,29 @@ func TestUpdateArticleAuthorFlow(t *testing.T) {
 	if updated.Title != "Tối ưu Go nâng cao" {
 		t.Errorf("title = %q, want edited title", updated.Title)
 	}
+	if !updated.Editable {
+		t.Error("editable should be true for the author in the edit response")
+	}
 	if len(updated.Body) != 2 || updated.Body[0].Type != "h" || updated.Body[1].Type != "p" {
 		t.Fatalf("body = %+v, want [h p]", updated.Body)
 	}
 
-	// The edit is persisted and visible at the same slug.
+	// The edit is persisted and visible at the same slug; the author sees the
+	// edit affordance flag.
 	var detail map[string]any
 	getClientEnv(t, client, srv.URL+v1+"/articles/"+slug, &detail)
 	if detail["title"] != "Tối ưu Go nâng cao" {
 		t.Errorf("persisted title = %v", detail["title"])
+	}
+	if detail["editable"] != true {
+		t.Errorf("author GET editable = %v, want true", detail["editable"])
+	}
+
+	// An anonymous reader is never the author → not editable.
+	var anon map[string]any
+	getEnv(t, srv.URL+v1+"/articles/"+slug, &anon)
+	if anon["editable"] != false {
+		t.Errorf("anonymous GET editable = %v, want false", anon["editable"])
 	}
 }
 
@@ -113,8 +128,8 @@ func TestUpdateArticleForbiddenWithoutPermission(t *testing.T) {
 
 func TestUpdateArticleForbiddenWhenNotAuthor(t *testing.T) {
 	srv, client := newAuthedClient(t, true)
-	// The session user is "Tác Giả"; docker-101 is authored by "Hùng Lê", so
-	// even with the permission the edit is forbidden (not the author).
+	// docker-101 is seed content with no owning account (author_id is NULL), so
+	// even with the permission no signed-in user matches → forbidden.
 	status, env := putJSON(t, client, srv.URL+v1+"/articles/docker-101", editArticleBody)
 	if status != http.StatusForbidden || env.Code != 3013 {
 		t.Fatalf("edit foreign article: status=%d code=%d, want 403/3013", status, env.Code)

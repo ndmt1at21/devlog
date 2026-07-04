@@ -30,13 +30,13 @@ export function ArticleView({
   initialComments: Comment[];
   initialReactions: ReactionStatus;
 }) {
-  const { user, premium } = useAuth();
+  const { premium } = useAuth();
   const t = useT();
 
-  // Show the edit affordance only to the article's author (matched by display
-  // name, the same identity the backend authorizes on). The backend re-checks
-  // ownership on save, so this is purely a UI convenience.
-  const canEdit = !!user?.canWrite && user.name === detail.author;
+  // The server flags whether the signed-in requester is this article's author
+  // (matched by user id, forwarded via the session cookie). PUT re-checks
+  // ownership, so this is purely a UI convenience.
+  const canEdit = detail.editable;
 
   useEffect(() => {
     track("view_article", {

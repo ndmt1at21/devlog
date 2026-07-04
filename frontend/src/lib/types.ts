@@ -79,6 +79,8 @@ export interface PartLink {
 
 export interface ArticleDetail extends ArticleSummary {
   body: Block[];
+  /** True when the requesting user is this article's author (server-computed). */
+  editable: boolean;
   locked: boolean;
   inSeries: boolean;
   seriesTitle?: string;

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -56,7 +57,11 @@ type partLink struct {
 // truncated) body and series navigation.
 type articleDetail struct {
 	articleSummary
-	Body            []domain.Block  `json:"body"`
+	Body []domain.Block `json:"body"`
+	// Editable is true when the requesting user is the article's author (matched
+	// by user id). It lets the client show the edit affordance without ever
+	// seeing raw author ids; PUT re-checks ownership authoritatively.
+	Editable        bool            `json:"editable"`
 	Locked          bool            `json:"locked"`
 	InSeries        bool            `json:"inSeries"`
 	SeriesTitle     string          `json:"seriesTitle,omitempty"`
@@ -82,6 +87,14 @@ func toSummary(a domain.Article) articleSummary {
 		s.Tags = []string{}
 	}
 	return s
+}
+
+// editableBy reports whether the request's user is the article's author. It
+// keys off the stable author id (empty for ownerless seed content, which no
+// signed-in user can match), never the display name.
+func editableBy(ctx context.Context, art domain.Article) bool {
+	u, ok := userFrom(ctx)
+	return ok && art.AuthorID != "" && art.AuthorID == u.Sub
 }
 
 func (a *API) listArticles(w http.ResponseWriter, r *http.Request) {
@@ -189,6 +202,7 @@ func (a *API) createArticle(w http.ResponseWriter, r *http.Request) {
 	art := domain.Article{
 		Category:    c.Category,
 		Author:      u.Name,
+		AuthorID:    u.Sub,
 		ReadTime:    content.ReadTime(c.Body),
 		PublishedAt: time.Now().UTC(),
 		Title:       c.Title,
@@ -221,6 +235,7 @@ func (a *API) createArticle(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusCreated, articleDetail{
 		articleSummary: toSummary(created),
 		Body:           created.Body,
+		Editable:       editableBy(r.Context(), created),
 	})
 }
 
@@ -335,8 +350,9 @@ func (a *API) updateArticle(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, apierr.ErrArticleLoad)
 		return
 	}
-	// Ownership: only the author may edit their own article.
-	if existing.Author != u.Name {
+	// Ownership: only the author may edit their own article, keyed to the stable
+	// author id (seed/imported content has an empty AuthorID and is uneditable).
+	if !editableBy(r.Context(), existing) {
 		logger.From(r.Context()).Warn("article edit forbidden: not author", "slug", slug, "sub", u.Sub)
 		writeError(w, r, apierr.ErrArticleEditForbidden)
 		return
@@ -369,6 +385,7 @@ func (a *API) updateArticle(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusOK, articleDetail{
 		articleSummary: toSummary(updated),
 		Body:           updated.Body,
+		Editable:       editableBy(r.Context(), updated),
 	})
 }
 
@@ -416,6 +433,7 @@ func (a *API) getArticle(w http.ResponseWriter, r *http.Request) {
 	detail := articleDetail{
 		articleSummary: toSummary(art),
 		Body:           body,
+		Editable:       editableBy(r.Context(), art),
 		Locked:         locked,
 	}
 

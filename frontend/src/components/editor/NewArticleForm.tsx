@@ -206,9 +206,10 @@ export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
       />
     );
   }
-  // Only the author may edit their own article. The backend re-checks this on
-  // PUT; the client guard just avoids showing a form that can't be saved.
-  if (editing && article && user.name !== article.author) {
+  // Only the author may edit their own article (server-computed by user id).
+  // The backend re-checks on PUT; this guard just avoids showing a form that
+  // can't be saved.
+  if (editing && article && !article.editable) {
     return (
       <Notice title={t("editor.notAuthorTitle")} body={t("editor.notAuthor")} />
     );

@@ -82,9 +82,10 @@ hint snapshotted into the session at login/refresh.
 Authors can also **edit their own articles** from `/articles/{slug}/edit` (an
 "Chỉnh sửa" link appears on the article for its author). `PUT
 /api/v1/articles/{slug}` requires the same `articles:create` permission **and**
-that the caller is the article's author (matched by display name, the identity
-stamped into `author` at create time); the slug stays fixed so existing links,
-comments and reactions keep working.
+that the caller is the article's author, matched by the stable **`author_id`**
+(the user id stamped at create time — added in migration `0005`). Seed/imported
+content has a `NULL` `author_id` and is read-only. The slug stays fixed so
+existing links, comments and reactions keep working.
 
 Permissions derive from the user's role (`reader`, `author`, `admin`; roles
 `author`/`admin` hold `articles:create`). **The first registered account is

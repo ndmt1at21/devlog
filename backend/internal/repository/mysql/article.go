@@ -71,16 +71,17 @@ func (r *articleRepo) List(ctx context.Context, f domain.ArticleFilter) ([]domai
 }
 
 func (r *articleRepo) GetBySlug(ctx context.Context, slug string) (domain.Article, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT "+articleSummaryCols+", body FROM articles WHERE slug = ?", slug)
+	row := r.db.QueryRowContext(ctx, "SELECT "+articleSummaryCols+", author_id, body FROM articles WHERE slug = ?", slug)
 	var a domain.Article
-	var cover, seriesSlug, partTitle sql.NullString
+	var cover, seriesSlug, partTitle, authorID sql.NullString
 	var seriesPart sql.NullInt64
 	var tags, body []byte
 	if err := row.Scan(&a.Slug, &a.Ord, &a.Featured, &a.Category, &a.Author, &a.ReadTime,
-		&a.PublishedAt, &a.Title, &a.Excerpt, &cover, &tags, &seriesSlug, &seriesPart, &partTitle, &body); err != nil {
+		&a.PublishedAt, &a.Title, &a.Excerpt, &cover, &tags, &seriesSlug, &seriesPart, &partTitle, &authorID, &body); err != nil {
 		return domain.Article{}, mapError(err)
 	}
 	a.Cover = cover.String
+	a.AuthorID = authorID.String
 	a.Series = seriesSlug.String
 	a.Part = int(seriesPart.Int64)
 	a.PartTitle = partTitle.String
@@ -144,9 +145,9 @@ func (r *articleRepo) Create(ctx context.Context, a domain.Article) (domain.Arti
 	// INSERT … SELECT computes Ord = max+1 atomically against the same table
 	// (aggregate SELECT yields exactly one row even when the table is empty).
 	if _, err := r.db.ExecContext(ctx, `INSERT INTO articles
-		 (id, slug, ord, featured, category, author, read_time, published_at, title, excerpt, cover, tags, series_slug, series_part, part_title, body, created_at, updated_at)
-		 SELECT ?, ?, COALESCE(MAX(ord), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM articles`,
-		a.ID, a.Slug, a.Featured, a.Category, a.Author, a.ReadTime, a.PublishedAt, a.Title, a.Excerpt,
+		 (id, slug, ord, featured, category, author, author_id, read_time, published_at, title, excerpt, cover, tags, series_slug, series_part, part_title, body, created_at, updated_at)
+		 SELECT ?, ?, COALESCE(MAX(ord), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM articles`,
+		a.ID, a.Slug, a.Featured, a.Category, a.Author, nullStr(a.AuthorID), a.ReadTime, a.PublishedAt, a.Title, a.Excerpt,
 		nullStr(a.Cover), tags, nullStr(a.Series), nullInt(a.Part), nullStr(a.PartTitle), body, now, now); err != nil {
 		return domain.Article{}, mapError(err)
 	}

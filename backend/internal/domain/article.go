@@ -32,12 +32,17 @@ type Series struct {
 // Article is the core content entity. Slug is the public identifier used in URLs
 // and the API (e.g. "ai-agents"); ID is the internal CHAR(36) UUID.
 type Article struct {
-	ID          string    `json:"-"`
-	Slug        string    `json:"slug"`
-	Ord         int       `json:"-"`
-	Featured    bool      `json:"featured"`
-	Category    string    `json:"category"`
-	Author      string    `json:"author"`
+	ID       string `json:"-"`
+	Slug     string `json:"slug"`
+	Ord      int    `json:"-"`
+	Featured bool   `json:"featured"`
+	Category string `json:"category"`
+	Author   string `json:"author"`
+	// AuthorID is the stable user id of the author (the session subject stamped
+	// at create time). Empty for seed/imported content that has no owning
+	// account. Never serialized — it is an internal authorization key, not
+	// public data; the API exposes an Editable flag instead.
+	AuthorID    string    `json:"-"`
 	ReadTime    string    `json:"read"`
 	PublishedAt time.Time `json:"-"`
 	Title       string    `json:"title"`
