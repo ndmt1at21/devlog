@@ -110,7 +110,17 @@ export function SearchBox({
   const viewAll = () => {
     setOpen(false);
     onNavigate?.();
-    router.push(`/?q=${encodeURIComponent(q)}`);
+    // Carry an active category filter (if any) through to the results view so
+    // the URL keeps the full state. Read it from the current URL at click time
+    // to avoid useSearchParams, which would opt static pages into client render.
+    const params = new URLSearchParams();
+    params.set("q", q);
+    const category =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("category")
+        : null;
+    if (category) params.set("category", category);
+    router.push(`/?${params.toString()}`);
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

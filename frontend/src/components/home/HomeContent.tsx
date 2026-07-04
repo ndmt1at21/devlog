@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { ArticleSummary } from "@/lib/types";
 import { useT } from "@/lib/i18n/provider";
 import { FeaturedCarousel } from "./FeaturedCarousel";
@@ -11,23 +12,26 @@ import { CategoryFilter } from "./CategoryFilter";
 const ALL = "Tất cả";
 
 /**
- * Homepage below the header. Text search is server-side: the page is fetched
- * with /?q=… (from the header SearchBox or a tag click) and `articles` arrive
- * pre-filtered. The category filter refines client-side on top of that.
+ * Homepage below the header. Both the text search (?q=…) and the category
+ * filter (?category=…) live in the URL, so a reload — or back/forward —
+ * restores the current view. Search is applied server-side (`articles` arrive
+ * pre-filtered); the category refines that list client-side.
  */
 export function HomeContent({
   featured,
   articles,
   categories,
   query = "",
+  category = ALL,
 }: {
   featured: ArticleSummary[];
   articles: ArticleSummary[];
   categories: string[];
   query?: string;
+  category?: string;
 }) {
   const t = useT();
-  const [category, setCategory] = useState(ALL);
+  const router = useRouter();
 
   const searching = query !== "";
   // Featured stays pinned on top across category switches; only an active
@@ -44,6 +48,22 @@ export function HomeContent({
     return list;
   }, [articles, category, showFeatured, featured]);
 
+  // Write the selection to the URL (preserving the search term) instead of
+  // holding it in local state, so it survives a reload. The article data does
+  // not depend on ?category=, so this is a cheap soft navigation; keep the
+  // scroll position so switching filters doesn't jump to the top.
+  const selectCategory = (cat: string) => {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (cat !== ALL) params.set("category", cat);
+    const qs = params.toString();
+    router.push(qs ? `/?${qs}` : "/", { scroll: false });
+  };
+
+  // Clearing the search drops ?q= but keeps the active category filter.
+  const clearSearchHref =
+    category !== ALL ? `/?category=${encodeURIComponent(category)}` : "/";
+
   return (
     <div>
       {showFeatured && (
@@ -58,7 +78,7 @@ export function HomeContent({
       <CategoryFilter
         categories={categories}
         active={category}
-        onSelect={setCategory}
+        onSelect={selectCategory}
       />
 
       {searching && (
@@ -69,7 +89,7 @@ export function HomeContent({
               : t("home.noResultsFor", { term: query })}
           </div>
           <Link
-            href="/"
+            href={clearSearchHref}
             className="text-[13.5px] font-semibold text-accent-ink no-underline hover:opacity-75"
           >
             {t("home.clearSearch")}
