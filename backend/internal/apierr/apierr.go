@@ -7,7 +7,7 @@ package apierr
 import "net/http"
 
 // Error is a typed API error: a stable Code, the HTTP Status to respond with,
-// and a default human Message“
+// and a default human Message
 type Error struct {
 	Code    int
 	Status  int
@@ -70,6 +70,9 @@ var (
 	ErrUploadTooLarge      = def(3009, http.StatusBadRequest, "Ảnh tối đa 5 MB.")
 	ErrUploadCreate        = def(3010, http.StatusInternalServerError, "Không tạo được liên kết tải ảnh.")
 	ErrImageHost           = def(3011, http.StatusBadRequest, "Ảnh trong bài phải được tải lên từ trình soạn thảo.")
+	// Editing an existing article (author-only).
+	ErrArticleUpdate        = def(3012, http.StatusInternalServerError, "Không cập nhật được bài viết.")
+	ErrArticleEditForbidden = def(3013, http.StatusForbidden, "Bạn không có quyền sửa bài viết này.")
 
 	// --- comments (4xxx) ---
 	ErrCommentList   = def(4000, http.StatusInternalServerError, "Không tải được bình luận.")

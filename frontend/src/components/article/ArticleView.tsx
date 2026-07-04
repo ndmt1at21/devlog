@@ -30,8 +30,13 @@ export function ArticleView({
   initialComments: Comment[];
   initialReactions: ReactionStatus;
 }) {
-  const { premium } = useAuth();
+  const { user, premium } = useAuth();
   const t = useT();
+
+  // Show the edit affordance only to the article's author (matched by display
+  // name, the same identity the backend authorizes on). The backend re-checks
+  // ownership on save, so this is purely a UI convenience.
+  const canEdit = !!user?.canWrite && user.name === detail.author;
 
   useEffect(() => {
     track("view_article", {
@@ -68,6 +73,14 @@ export function ArticleView({
         <span>{detail.date}</span>
         <span>·</span>
         <span>{detail.read}</span>
+        {canEdit && (
+          <Link
+            href={`/articles/${detail.slug}/edit`}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-border2 px-3.5 py-1 text-[13px] font-semibold text-accent-ink no-underline transition-colors hover:border-hover"
+          >
+            ✎ {t("article.edit")}
+          </Link>
+        )}
       </div>
 
       {detail.inSeries && detail.seriesParts && (

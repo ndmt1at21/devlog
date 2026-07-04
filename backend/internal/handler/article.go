@@ -181,74 +181,20 @@ func (a *API) createArticle(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	in.Title = strings.TrimSpace(in.Title)
-	in.Excerpt = strings.TrimSpace(in.Excerpt)
-	in.Category = strings.TrimSpace(in.Category)
-	switch {
-	case in.Title == "":
-		writeError(w, r, apierr.ErrValidation.WithMessage("Vui lòng nhập tiêu đề."))
-		return
-	case len(in.Title) > 300:
-		writeError(w, r, apierr.ErrValidation.WithMessage("Tiêu đề tối đa 300 ký tự."))
-		return
-	case in.Category == "" || len(in.Category) > 80:
-		writeError(w, r, apierr.ErrValidation.WithMessage("Vui lòng chọn danh mục hợp lệ."))
-		return
-	case len(in.Excerpt) > 500:
-		writeError(w, r, apierr.ErrValidation.WithMessage("Mô tả ngắn tối đa 500 ký tự."))
-		return
-	}
-	tags, err := normalizeTags(in.Tags)
+	c, err := a.prepareArticle(in)
 	if err != nil {
 		writeError(w, r, err)
 		return
-	}
-
-	var raw []domain.Block
-	switch in.Format {
-	case "markdown":
-		raw = content.BlocksFromMarkdown(in.Content)
-	case "blocks":
-		raw = make([]domain.Block, 0, len(in.Body))
-		for _, b := range in.Body {
-			raw = append(raw, domain.Block{
-				Type: b.Type, Text: b.Text, Lang: b.Lang, Code: b.Code,
-				Caption: b.Caption, Steps: b.Steps, Items: b.Items, Ordered: b.Ordered,
-				Src: b.Src, Alt: b.Alt,
-			})
-		}
-	default:
-		writeError(w, r, apierr.ErrValidation.WithMessage("Định dạng nội dung phải là markdown hoặc blocks."))
-		return
-	}
-	body, err := content.NormalizeBlocks(raw)
-	var invalid *content.ErrInvalid
-	if errors.As(err, &invalid) {
-		writeError(w, r, apierr.ErrValidation.WithMessage(invalid.Reason+"."))
-		return
-	}
-	if err != nil {
-		writeError(w, r, apierr.ErrArticleCreate)
-		return
-	}
-	if err := a.checkImageHosts(body); err != nil {
-		writeError(w, r, err)
-		return
-	}
-
-	excerpt := in.Excerpt
-	if excerpt == "" {
-		excerpt = content.DeriveExcerpt(body)
 	}
 	art := domain.Article{
-		Category:    in.Category,
+		Category:    c.Category,
 		Author:      u.Name,
-		ReadTime:    content.ReadTime(body),
+		ReadTime:    content.ReadTime(c.Body),
 		PublishedAt: time.Now().UTC(),
-		Title:       in.Title,
-		Excerpt:     excerpt,
-		Tags:        tags,
-		Body:        body,
+		Title:       c.Title,
+		Excerpt:     c.Excerpt,
+		Tags:        c.Tags,
+		Body:        c.Body,
 	}
 
 	// Slug uniqueness: try the natural slug, then numbered variants. The unique
@@ -275,6 +221,154 @@ func (a *API) createArticle(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusCreated, articleDetail{
 		articleSummary: toSummary(created),
 		Body:           created.Body,
+	})
+}
+
+// articleContent is the validated, normalized result of a create/update payload:
+// the trimmed metadata, the resolved excerpt, and the normalized body — ready to
+// persist onto a domain.Article.
+type articleContent struct {
+	Title    string
+	Excerpt  string
+	Category string
+	Tags     []string
+	Body     []domain.Block
+}
+
+// prepareArticle validates a create/update payload and normalizes its metadata
+// and body. On invalid input it returns an *apierr.Error (already localized) for
+// the caller to write; on success the excerpt is derived from the body when the
+// client left it blank.
+func (a *API) prepareArticle(in createArticleInput) (articleContent, error) {
+	title := strings.TrimSpace(in.Title)
+	excerpt := strings.TrimSpace(in.Excerpt)
+	category := strings.TrimSpace(in.Category)
+	switch {
+	case title == "":
+		return articleContent{}, apierr.ErrValidation.WithMessage("Vui lòng nhập tiêu đề.")
+	case len(title) > 300:
+		return articleContent{}, apierr.ErrValidation.WithMessage("Tiêu đề tối đa 300 ký tự.")
+	case category == "" || len(category) > 80:
+		return articleContent{}, apierr.ErrValidation.WithMessage("Vui lòng chọn danh mục hợp lệ.")
+	case len(excerpt) > 500:
+		return articleContent{}, apierr.ErrValidation.WithMessage("Mô tả ngắn tối đa 500 ký tự.")
+	}
+	tags, err := normalizeTags(in.Tags)
+	if err != nil {
+		return articleContent{}, err
+	}
+
+	var raw []domain.Block
+	switch in.Format {
+	case "markdown":
+		raw = content.BlocksFromMarkdown(in.Content)
+	case "blocks":
+		raw = make([]domain.Block, 0, len(in.Body))
+		for _, b := range in.Body {
+			raw = append(raw, domain.Block{
+				Type: b.Type, Text: b.Text, Lang: b.Lang, Code: b.Code,
+				Caption: b.Caption, Steps: b.Steps, Items: b.Items, Ordered: b.Ordered,
+				Src: b.Src, Alt: b.Alt,
+			})
+		}
+	default:
+		return articleContent{}, apierr.ErrValidation.WithMessage("Định dạng nội dung phải là markdown hoặc blocks.")
+	}
+	body, err := content.NormalizeBlocks(raw)
+	var invalid *content.ErrInvalid
+	if errors.As(err, &invalid) {
+		return articleContent{}, apierr.ErrValidation.WithMessage(invalid.Reason + ".")
+	}
+	if err != nil {
+		return articleContent{}, apierr.ErrInternal
+	}
+	if err := a.checkImageHosts(body); err != nil {
+		return articleContent{}, err
+	}
+
+	if excerpt == "" {
+		excerpt = content.DeriveExcerpt(body)
+	}
+	return articleContent{
+		Title:    title,
+		Excerpt:  excerpt,
+		Category: category,
+		Tags:     tags,
+		Body:     body,
+	}, nil
+}
+
+// updateArticle edits an existing article. Requires a session AND the IAM
+// "articles:create" permission AND that the requester is the article's author.
+// Authorship is matched by display name — the same identity createArticle stamps
+// into Author (the content model has no separate author id). The slug, author,
+// publish time, ordering and series placement are immutable; only the title,
+// excerpt, category, tags and body change.
+func (a *API) updateArticle(w http.ResponseWriter, r *http.Request) {
+	u, ok := userFrom(r.Context())
+	if !ok {
+		writeError(w, r, apierr.ErrUnauthorized)
+		return
+	}
+	if a.Auth == nil {
+		writeError(w, r, apierr.ErrAuthNotConfigured)
+		return
+	}
+	allowed, err := a.Auth.CheckPermissions(r.Context(), u.Access, []string{articleCreatePermission})
+	if err != nil {
+		writeError(w, r, apierr.ErrAuthUpstream)
+		return
+	}
+	if !allowed {
+		logger.From(r.Context()).Warn("article edit denied", "sub", u.Sub)
+		writeError(w, r, apierr.ErrArticleForbidden)
+		return
+	}
+
+	slug := r.PathValue("slug")
+	existing, err := a.Store.Articles().GetBySlug(r.Context(), slug)
+	if errors.Is(err, domain.ErrNotFound) {
+		writeError(w, r, apierr.ErrArticleNotFound)
+		return
+	}
+	if err != nil {
+		writeError(w, r, apierr.ErrArticleLoad)
+		return
+	}
+	// Ownership: only the author may edit their own article.
+	if existing.Author != u.Name {
+		logger.From(r.Context()).Warn("article edit forbidden: not author", "slug", slug, "sub", u.Sub)
+		writeError(w, r, apierr.ErrArticleEditForbidden)
+		return
+	}
+
+	var in createArticleInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	c, err := a.prepareArticle(in)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	existing.Title = c.Title
+	existing.Excerpt = c.Excerpt
+	existing.Category = c.Category
+	existing.Tags = c.Tags
+	existing.Body = c.Body
+	existing.ReadTime = content.ReadTime(c.Body)
+
+	updated, err := a.Store.Articles().Update(r.Context(), existing)
+	if err != nil {
+		writeError(w, r, apierr.ErrArticleUpdate)
+		return
+	}
+
+	logger.From(r.Context()).Info("article updated", "slug", updated.Slug, "sub", u.Sub)
+	writeJSON(w, r, http.StatusOK, articleDetail{
+		articleSummary: toSummary(updated),
+		Body:           updated.Body,
 	})
 }
 

@@ -79,6 +79,13 @@ the same block model). The backend verifies the permission on every
 `POST /api/v1/articles`; the account menu's "Viết bài mới" entry is only a UI
 hint snapshotted into the session at login/refresh.
 
+Authors can also **edit their own articles** from `/articles/{slug}/edit` (an
+"Chỉnh sửa" link appears on the article for its author). `PUT
+/api/v1/articles/{slug}` requires the same `articles:create` permission **and**
+that the caller is the article's author (matched by display name, the identity
+stamped into `author` at create time); the slug stays fixed so existing links,
+comments and reactions keep working.
+
 Permissions derive from the user's role (`reader`, `author`, `admin`; roles
 `author`/`admin` hold `articles:create`). **The first registered account is
 bootstrapped as `author`**; everyone after that is a `reader`. To promote
@@ -101,6 +108,7 @@ The browser reaches the API same-origin via a `/api/*` rewrite (see
 
 - `GET /api/articles` · `GET /api/articles/featured` · `GET /api/categories`
 - `GET /api/articles/{slug}` (server-side Pro paywall)
+- `POST /api/articles` · `PUT /api/articles/{slug}` (author-only publish/edit; `articles:create`)
 - `GET|POST /api/articles/{slug}/comments`
 - `POST /api/auth/{login,register,forgot-password,logout}` · `GET /api/auth/me`
 - `GET /api/pro/plans` · `GET|POST /api/me/subscription`

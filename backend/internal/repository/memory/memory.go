@@ -165,6 +165,26 @@ func (r *articleRepo) Create(_ context.Context, a domain.Article) (domain.Articl
 	return a, nil
 }
 
+func (r *articleRepo) Update(_ context.Context, a domain.Article) (domain.Article, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, ex := range r.articles {
+		if ex.Slug == a.Slug {
+			// Overlay only the editable fields, preserving the stored row's
+			// identity, ordering and series placement.
+			ex.Category = a.Category
+			ex.ReadTime = a.ReadTime
+			ex.Title = a.Title
+			ex.Excerpt = a.Excerpt
+			ex.Tags = a.Tags
+			ex.Body = a.Body
+			r.articles[i] = ex
+			return ex, nil
+		}
+	}
+	return domain.Article{}, domain.ErrNotFound
+}
+
 func (r *articleRepo) SeriesParts(_ context.Context, seriesSlug string) ([]domain.Article, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

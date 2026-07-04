@@ -153,6 +153,30 @@ func (r *articleRepo) Create(ctx context.Context, a domain.Article) (domain.Arti
 	return a, nil
 }
 
+// Update rewrites the mutable columns of the article with the given Slug. Only
+// the fields an author can change through the editor are touched; identity,
+// ordering and series columns are left as-is. RowsAffected is not inspected: the
+// default driver reports changed (not matched) rows, so an edit that changes
+// nothing is indistinguishable from a missing slug — the handler verifies the
+// article exists (and its ownership) before calling this.
+func (r *articleRepo) Update(ctx context.Context, a domain.Article) (domain.Article, error) {
+	tags, err := marshalJSON(a.Tags)
+	if err != nil {
+		return domain.Article{}, err
+	}
+	body, err := marshalJSON(a.Body)
+	if err != nil {
+		return domain.Article{}, err
+	}
+	if _, err := r.db.ExecContext(ctx, `UPDATE articles
+		 SET category = ?, read_time = ?, title = ?, excerpt = ?, tags = ?, body = ?, updated_at = ?
+		 WHERE slug = ?`,
+		a.Category, a.ReadTime, a.Title, a.Excerpt, tags, body, timeNow(), a.Slug); err != nil {
+		return domain.Article{}, mapError(err)
+	}
+	return a, nil
+}
+
 func (r *articleRepo) SeriesParts(ctx context.Context, seriesSlug string) ([]domain.Article, error) {
 	rows, err := r.db.QueryContext(ctx, "SELECT "+articleSummaryCols+" FROM articles WHERE series_slug = ? ORDER BY series_part", seriesSlug)
 	if err != nil {

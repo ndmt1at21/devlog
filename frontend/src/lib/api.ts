@@ -72,6 +72,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  // Edit an existing article (author-only; the backend re-checks ownership).
+  updateArticle: (slug: string, body: NewArticleInput) =>
+    request<ArticleDetail>(`/articles/${encodeURIComponent(slug)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
 
   // --- image uploads (presigned direct-to-bucket PUT) ---
   createUpload: (body: { type: string; size: number }) =>

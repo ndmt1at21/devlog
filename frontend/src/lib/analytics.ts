@@ -20,6 +20,7 @@ declare global {
 export type AnalyticsEvent =
   | "view_article"
   | "create_article"
+  | "edit_article"
   | "select_article"
   | "search"
   | "select_category"

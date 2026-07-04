@@ -105,6 +105,12 @@ const vi: Dict = {
     previewEmpty: "Chưa có nội dung để xem trước.",
     submit: "Đăng bài",
     submitting: "Đang đăng…",
+    editTitle: "Chỉnh sửa bài viết",
+    editSub: "Cập nhật nội dung bài viết của bạn.",
+    editSubmit: "Lưu thay đổi",
+    editSubmitting: "Đang lưu…",
+    notAuthorTitle: "Không thể chỉnh sửa",
+    notAuthor: "Bạn chỉ có thể chỉnh sửa bài viết do chính mình đăng.",
     needLoginTitle: "Cần đăng nhập",
     needLogin: "Bạn cần đăng nhập để viết bài mới.",
     loginCta: "Đăng nhập",
@@ -137,6 +143,7 @@ const vi: Dict = {
   },
   article: {
     cover: "ảnh bìa bài viết",
+    edit: "Chỉnh sửa",
     prevPart: "← Phần trước",
     nextPart: "Phần tiếp theo →",
     share: {
@@ -381,6 +388,12 @@ const en: Dict = {
     previewEmpty: "Nothing to preview yet.",
     submit: "Publish",
     submitting: "Publishing…",
+    editTitle: "Edit article",
+    editSub: "Update the content of your article.",
+    editSubmit: "Save changes",
+    editSubmitting: "Saving…",
+    notAuthorTitle: "Can’t edit this article",
+    notAuthor: "You can only edit articles you published yourself.",
     needLoginTitle: "Login required",
     needLogin: "You need to log in to write a post.",
     loginCta: "Log in",
@@ -413,6 +426,7 @@ const en: Dict = {
   },
   article: {
     cover: "article cover",
+    edit: "Edit",
     prevPart: "← Previous part",
     nextPart: "Next part →",
     share: {

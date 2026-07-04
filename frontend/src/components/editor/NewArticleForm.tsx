@@ -21,7 +21,7 @@ import {
   baseName,
   uploadImage,
 } from "@/lib/uploads";
-import type { Block, NewArticleInput } from "@/lib/types";
+import type { ArticleDetail, Block, NewArticleInput } from "@/lib/types";
 import { BlockView } from "@/components/article/BlockRenderer";
 
 type Mode = "markdown" | "blocks";
@@ -65,6 +65,48 @@ const splitLines = (s: string) =>
     .map((l) => l.trim())
     .filter(Boolean);
 
+// blocksToRows seeds the rich-text editor from a stored article body (edit
+// mode). Types the block editor can't represent (e.g. the synthesized "ad")
+// are skipped; an empty result falls back to one blank row.
+function blocksToRows(blocks: Block[]): EditorBlock[] {
+  const rows: EditorBlock[] = [];
+  for (const b of blocks) {
+    switch (b.type) {
+      case "code":
+        rows.push({ ...newBlock("code"), lang: b.lang ?? "", code: b.code ?? "" });
+        break;
+      case "img":
+        rows.push({
+          ...newBlock("img"),
+          src: b.src ?? "",
+          alt: b.alt ?? "",
+          caption: b.caption ?? "",
+        });
+        break;
+      case "diagram":
+        rows.push({
+          ...newBlock("diagram"),
+          lines: (b.steps ?? []).join("\n"),
+          caption: b.caption ?? "",
+        });
+        break;
+      case "list":
+        rows.push({
+          ...newBlock("list"),
+          lines: (b.items ?? []).join("\n"),
+          ordered: !!b.ordered,
+        });
+        break;
+      case "p":
+      case "h":
+      case "quote":
+        rows.push({ ...newBlock(b.type), text: b.text ?? "" });
+        break;
+    }
+  }
+  return rows.length > 0 ? rows : [newBlock()];
+}
+
 function toBlocks(rows: EditorBlock[]): Block[] {
   const out: Block[] = [];
   for (const b of rows) {
@@ -104,18 +146,25 @@ function toBlocks(rows: EditorBlock[]): Block[] {
 const fieldCls = "field px-[14px] py-3 text-[15px]";
 const labelCls = "mb-[7px] block text-[13.5px] font-semibold text-strong";
 
-export function NewArticleForm() {
+// NewArticleForm doubles as the edit form: pass `article` to prefill the fields
+// and switch the submit to PUT. In edit mode the block editor is seeded from the
+// stored body (markdown can't be reconstructed losslessly), so the mode starts
+// on "blocks".
+export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
   const router = useRouter();
   const { user, loading } = useAuth();
   const t = useT();
+  const editing = !!article;
 
-  const [title, setTitle] = useState("");
-  const [excerpt, setExcerpt] = useState("");
-  const [category, setCategory] = useState("");
-  const [tagsRaw, setTagsRaw] = useState("");
-  const [mode, setMode] = useState<Mode>("markdown");
+  const [title, setTitle] = useState(article?.title ?? "");
+  const [excerpt, setExcerpt] = useState(article?.excerpt ?? "");
+  const [category, setCategory] = useState(article?.category ?? "");
+  const [tagsRaw, setTagsRaw] = useState(article ? article.tags.join(", ") : "");
+  const [mode, setMode] = useState<Mode>(article ? "blocks" : "markdown");
   const [markdown, setMarkdown] = useState("");
-  const [rows, setRows] = useState<EditorBlock[]>([newBlock()]);
+  const [rows, setRows] = useState<EditorBlock[]>(() =>
+    article ? blocksToRows(article.body) : [newBlock()],
+  );
   const [preview, setPreview] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -155,6 +204,13 @@ export function NewArticleForm() {
         title={t("editor.noPermissionTitle")}
         body={t("editor.noPermission")}
       />
+    );
+  }
+  // Only the author may edit their own article. The backend re-checks this on
+  // PUT; the client guard just avoids showing a form that can't be saved.
+  if (editing && article && user.name !== article.author) {
+    return (
+      <Notice title={t("editor.notAuthorTitle")} body={t("editor.notAuthor")} />
     );
   }
 
@@ -285,9 +341,16 @@ export function NewArticleForm() {
 
     setBusy(true);
     try {
-      const created = await api.createArticle(payload);
-      track("create_article", { slug: created.slug, format: mode });
-      router.push(`/articles/${created.slug}`);
+      const saved =
+        editing && article
+          ? await api.updateArticle(article.slug, payload)
+          : await api.createArticle(payload);
+      track(editing ? "edit_article" : "create_article", {
+        slug: saved.slug,
+        format: mode,
+      });
+      router.push(`/articles/${saved.slug}`);
+      router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("error.body"));
       setBusy(false);
@@ -303,9 +366,11 @@ export function NewArticleForm() {
   return (
     <div className="mx-auto max-w-[760px] px-6 pb-24 pt-9">
       <h1 className="m-0 mb-2 text-[30px] font-extrabold tracking-[-.03em] text-text">
-        {t("editor.title")}
+        {editing ? t("editor.editTitle") : t("editor.title")}
       </h1>
-      <p className="m-0 mb-[26px] text-[15px] text-muted">{t("editor.sub")}</p>
+      <p className="m-0 mb-[26px] text-[15px] text-muted">
+        {editing ? t("editor.editSub") : t("editor.sub")}
+      </p>
 
       <form onSubmit={submit} className="rounded-2xl border border-border bg-surface p-7">
         {/* --- metadata --- */}
@@ -518,7 +583,13 @@ export function NewArticleForm() {
           disabled={busy}
           className="btn-accent w-full py-[13px] text-[15px] disabled:opacity-60"
         >
-          {busy ? t("editor.submitting") : t("editor.submit")}
+          {busy
+            ? editing
+              ? t("editor.editSubmitting")
+              : t("editor.submitting")
+            : editing
+              ? t("editor.editSubmit")
+              : t("editor.submit")}
         </button>
       </form>
     </div>
