@@ -43,6 +43,11 @@ type Provider struct {
 	googleClientID     string
 	googleClientSecret string
 	httpc              *http.Client
+
+	// refreshGroup coalesces concurrent Refresh calls that present the same
+	// token so a page firing several authenticated requests at once rotates it
+	// exactly once and every caller gets the same new token set — see Refresh.
+	refreshGroup callGroup
 }
 
 var _ authn.Provider = (*Provider)(nil)
@@ -64,6 +69,7 @@ func New(store domain.Store, secret string, google GoogleConfig) *Provider {
 		googleClientID:     google.ClientID,
 		googleClientSecret: google.ClientSecret,
 		httpc:              &http.Client{Timeout: 10 * time.Second},
+		refreshGroup:       callGroup{inflight: make(map[string]*refreshCall)},
 	}
 }
 
@@ -137,7 +143,23 @@ func (p *Provider) Logout(ctx context.Context, refreshToken string) error {
 
 // Refresh rotates the refresh token and mints a fresh token set: the presented
 // token is revoked and a new one with a full window is issued in its place.
+//
+// Rotation is single-use, which races badly when a page load fires several
+// authenticated requests at once — all carrying the same just-expired session
+// cookie. The first rotates the token; without coordination the rest would find
+// it revoked and the caller would tear the session down. So concurrent calls
+// presenting the same token are coalesced: the rotation runs once and every
+// caller receives the same new token set. This keeps rotation strictly
+// single-use (a genuinely reused or logged-out token, presented after the
+// in-flight rotation settles, still fails).
 func (p *Provider) Refresh(ctx context.Context, refreshToken string) (*authn.TokenSet, error) {
+	return p.refreshGroup.do(hashToken(refreshToken), func() (*authn.TokenSet, error) {
+		return p.rotate(ctx, refreshToken)
+	})
+}
+
+// rotate performs the actual single-use rotation for one refresh token.
+func (p *Provider) rotate(ctx context.Context, refreshToken string) (*authn.TokenSet, error) {
 	hash := hashToken(refreshToken)
 	t, err := p.store.RefreshTokens().GetByHash(ctx, hash)
 	if errors.Is(err, domain.ErrNotFound) {

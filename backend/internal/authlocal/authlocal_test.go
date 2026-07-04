@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -164,5 +166,98 @@ func TestFederatedLoginURL(t *testing.T) {
 	}
 	if got := p.FederatedLoginURL("facebook", "st", "https://app/cb"); got != "" {
 		t.Fatalf("unknown provider URL = %q, want empty", got)
+	}
+}
+
+// TestCallGroupCoalesces proves that overlapping calls for the same key run the
+// work exactly once and every caller receives that one result — the property
+// Refresh relies on so a burst of concurrent refreshes rotates the token once
+// instead of tearing the session down.
+func TestCallGroupCoalesces(t *testing.T) {
+	g := callGroup{inflight: make(map[string]*refreshCall)}
+
+	var calls atomic.Int32
+	started := make(chan struct{})
+	release := make(chan struct{})
+	fn := func() (*authn.TokenSet, error) {
+		if calls.Add(1) == 1 {
+			close(started) // first (and only) execution has begun
+		}
+		<-release
+		return &authn.TokenSet{AccessToken: "shared"}, nil
+	}
+
+	const n = 8
+	results := make([]*authn.TokenSet, n)
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := range n {
+		go func(i int) {
+			defer wg.Done()
+			ts, _ := g.do("k", fn)
+			results[i] = ts
+		}(i)
+	}
+
+	<-started                         // one caller is inside fn holding the entry
+	time.Sleep(20 * time.Millisecond) // let the rest join the in-flight call
+	close(release)
+	wg.Wait()
+
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("fn executed %d times, want 1 (calls not coalesced)", got)
+	}
+	for i, r := range results {
+		if r == nil || r.AccessToken != "shared" {
+			t.Fatalf("result[%d] = %+v, want the shared token set", i, r)
+		}
+	}
+}
+
+// TestConcurrentRefreshKeepsSession fires many refreshes of the same token at
+// once (the page-load stampede) and requires that they don't collectively kill
+// the session: at least one succeeds and every success returns an identical,
+// usable rotated token.
+func TestConcurrentRefreshKeepsSession(t *testing.T) {
+	p := newProvider()
+	ctx := context.Background()
+	register(t, p, "a@b.co", "secret123", "A")
+	ts, err := p.Login(ctx, "a@b.co", "secret123")
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+
+	const n = 16
+	got := make([]*authn.TokenSet, n)
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := range n {
+		go func(i int) {
+			defer wg.Done()
+			out, err := p.Refresh(ctx, ts.RefreshToken)
+			if err == nil {
+				got[i] = out
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	var rotated string
+	for _, out := range got {
+		if out == nil {
+			continue
+		}
+		if rotated == "" {
+			rotated = out.RefreshToken
+		} else if out.RefreshToken != rotated {
+			t.Fatalf("concurrent refreshes returned different tokens: %q vs %q", rotated, out.RefreshToken)
+		}
+	}
+	if rotated == "" {
+		t.Fatal("no concurrent refresh succeeded; the session was torn down")
+	}
+	// The single rotated token is valid and usable.
+	if _, err := p.Refresh(ctx, rotated); err != nil {
+		t.Fatalf("rotated token unusable: %v", err)
 	}
 }

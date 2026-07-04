@@ -315,10 +315,10 @@ func (a *API) prepareArticle(in createArticleInput) (articleContent, error) {
 
 // updateArticle edits an existing article. Requires a session AND the IAM
 // "articles:create" permission AND that the requester is the article's author.
-// Authorship is matched by display name — the same identity createArticle stamps
-// into Author (the content model has no separate author id). The slug, author,
-// publish time, ordering and series placement are immutable; only the title,
-// excerpt, category, tags and body change.
+// Authorship is matched by the stable author id (AuthorID == session sub) via
+// editableBy, never the display name. The slug, author, publish time, ordering
+// and series placement are immutable; only the title, excerpt, category, tags
+// and body change.
 func (a *API) updateArticle(w http.ResponseWriter, r *http.Request) {
 	u, ok := userFrom(r.Context())
 	if !ok {

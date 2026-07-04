@@ -28,6 +28,19 @@ const oauthStateCookie = "devnote_oauth_state"
 // redirect URI on the Google OAuth client.
 const googleCallbackPath = "/api/v1/auth/google/callback"
 
+// internalReadHeader marks a request as a non-mutating, server-side read (set
+// by the Next.js SSR API client on its RSC fetches). Those responses can't
+// propagate our Set-Cookie back to the browser, so we must not rotate the
+// session on them — see withSession.
+const internalReadHeader = "X-Session-Read"
+
+// isReadOnlySession reports whether the request is a safe, server-side read that
+// must not mutate the session. Gated to GET so a stray header can never suppress
+// the refresh a write actually needs.
+func isReadOnlySession(r *http.Request) bool {
+	return r.Method == http.MethodGet && r.Header.Get(internalReadHeader) == "1"
+}
+
 // withSession resolves the session cookie into a SessionUser on the request
 // context, refreshing the access token when expired.
 func (a *API) withSession(next http.Handler) http.Handler {
@@ -39,6 +52,16 @@ func (a *API) withSession(next http.Handler) http.Handler {
 		data, ok := a.Sessions.Load(r)
 		if !ok {
 			next.ServeHTTP(w, r)
+			return
+		}
+		// Server-side reads (Next.js RSC fetches) can't write our rotated cookie
+		// back to the browser, so refreshing here would revoke the refresh token
+		// while the browser keeps the old cookie — logging the user out on their
+		// next request. Such reads only need the sealed identity (sub / premium /
+		// canWrite), never a live access token, so pass the session through
+		// untouched and let the browser's own /auth/me revalidation refresh it.
+		if isReadOnlySession(r) {
+			next.ServeHTTP(w, r.WithContext(withUser(r.Context(), a.sessionUser(r, data))))
 			return
 		}
 		if data.Expired() && data.Refresh != "" {

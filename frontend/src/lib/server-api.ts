@@ -31,12 +31,21 @@ interface Envelope<T> {
  * anything whose response depends on the requester — auth, reactions,
  * bookmarks, and the article detail (its body is truncated by the paywall
  * according to the user's premium status).
+ *
+ * These run during a Server Component render, which cannot write cookies back
+ * to the browser. The `X-Session-Read` header tells the backend to treat the
+ * request as read-only: it resolves the caller from the sealed session cookie
+ * but never rotates the refresh token, so a mid-flight token rotation here can't
+ * revoke the cookie the browser still holds. The browser's own /auth/me
+ * revalidation (a first-party request) is what actually refreshes the session.
  */
 async function serverGet<T>(path: string): Promise<T | null> {
   const cookieHeader = (await cookies()).toString();
   try {
+    const headers: Record<string, string> = { "X-Session-Read": "1" };
+    if (cookieHeader) headers.cookie = cookieHeader;
     const res = await fetch(`${INTERNAL}${API_V1}${path}`, {
-      headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+      headers,
       cache: "no-store",
     });
     const env = (await res.json()) as Envelope<T>;
