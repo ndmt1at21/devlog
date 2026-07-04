@@ -36,6 +36,10 @@ export function GoogleButton({
   event: "login" | "sign_up";
 }) {
   return (
+    // The OAuth passthrough route handler makes this look like an internal
+    // page, but it must stay a plain <a>: <Link> prefetch would start the
+    // redirect flow (and rotate the state cookie) in the background.
+    // eslint-disable-next-line @next/next/no-html-link-for-pages
     <a
       href="/api/v1/auth/google/login"
       onClick={() => track(event, { method: "google" })}
