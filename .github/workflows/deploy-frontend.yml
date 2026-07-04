@@ -60,6 +60,17 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # A deploy with this secret empty bakes a localhost /api rewrite into the
+      # Worker and every /api/* request 500s in production — fail loudly instead.
+      - name: Require BACKEND_INTERNAL_URL
+        env:
+          BACKEND_INTERNAL_URL: ${{ secrets.BACKEND_INTERNAL_URL }}
+        run: |
+          if [ -z "$BACKEND_INTERNAL_URL" ]; then
+            echo "::error::PROD secret BACKEND_INTERNAL_URL is empty. Set it to the backend origin (e.g. https://api.jamti.dev) in Settings → Environments → PROD, then re-run."
+            exit 1
+          fi
+
       - name: Build & deploy
         run: npm run deploy
         env:
