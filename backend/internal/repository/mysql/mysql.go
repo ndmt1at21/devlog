@@ -29,8 +29,9 @@ type Store struct {
 	db *sql.DB
 }
 
-// New opens a MySQL connection, applies migrations, seeds initial content when
-// the articles table is empty, and returns the store.
+// New opens a MySQL connection, applies migrations, and returns the store. It
+// never seeds: production databases stay clean, and demo content is loaded
+// out-of-band by the separate `cmd/seed` command (which calls Store.Seed).
 func New(ctx context.Context, dsn string) (*Store, error) {
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -47,9 +48,6 @@ func New(ctx context.Context, dsn string) (*Store, error) {
 	s := &Store{db: db}
 	if err := s.migrate(ctx); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
-	}
-	if err := s.seedIfEmpty(ctx); err != nil {
-		return nil, fmt.Errorf("seed: %w", err)
 	}
 	return s, nil
 }
@@ -114,17 +112,6 @@ func (s *Store) migrate(ctx context.Context) error {
 }
 
 // ---- seeding ----
-
-func (s *Store) seedIfEmpty(ctx context.Context) error {
-	var n int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM articles`).Scan(&n); err != nil {
-		return err
-	}
-	if n > 0 {
-		return nil
-	}
-	return s.Seed(ctx)
-}
 
 // Seed upserts the design's series and articles and inserts seed comments when
 // none exist. Safe to run repeatedly.

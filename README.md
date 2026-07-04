@@ -47,11 +47,18 @@ external service). The first account you register becomes the author.
 
 ```bash
 DB_DRIVER=mysql DB_DSN='devlog:devlog@tcp(localhost:3306)/devlog?parseTime=true&loc=UTC&multiStatements=true' \
-  go run ./cmd/server      # auto-creates schema + seeds on first run
+  go run ./cmd/server      # auto-creates/updates schema on startup
+
+# Optional: load the design's demo articles into a fresh local DB (separate
+# command; the server never seeds).
+DB_DRIVER=mysql DB_DSN='…' go run ./cmd/seed   # or: make seed
 ```
 
-Schema migrations live in `backend/migrations/mysql/` (embedded, applied on
-startup).
+Schema migrations live in `backend/migrations/mysql/` (embedded, versioned
+`NNNN_name.up/down.sql`, applied on startup and tracked in `schema_migrations`).
+They are **DDL only** — no seed rows — so starting the server against production
+never inserts sample content. Demo seeding is a separate, explicit command
+(`cmd/seed`); it migrates then upserts the design content, and is idempotent.
 
 ### Auth (embedded)
 
