@@ -7,7 +7,7 @@ package apierr
 import "net/http"
 
 // Error is a typed API error: a stable Code, the HTTP Status to respond with,
-// and a default human Message.
+// and a default human Message“
 type Error struct {
 	Code    int
 	Status  int
