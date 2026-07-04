@@ -11,6 +11,11 @@ import (
 type Config struct {
 	Port string
 
+	// Observability. LogLevel is debug|info|warn|error; LogFormat is "json"
+	// (one object per line, for log aggregation) or "text" (human-readable dev).
+	LogLevel  string
+	LogFormat string
+
 	// Storage: "memory" (zero-infra dev default) or "mysql".
 	DBDriver string
 	DBDSN    string
@@ -60,6 +65,8 @@ type Config struct {
 func Load() (Config, error) {
 	c := Config{
 		Port:               env("PORT", "8080"),
+		LogLevel:           strings.ToLower(env("LOG_LEVEL", "info")),
+		LogFormat:          strings.ToLower(env("LOG_FORMAT", "text")),
 		DBDriver:           strings.ToLower(env("DB_DRIVER", "memory")),
 		DBDSN:              os.Getenv("DB_DSN"),
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),

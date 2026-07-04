@@ -3,7 +3,6 @@ package handler
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"github.com/ndmt1at21/devlog/backend/internal/apierr"
 	"github.com/ndmt1at21/devlog/backend/internal/content"
 	"github.com/ndmt1at21/devlog/backend/internal/domain"
+	"github.com/ndmt1at21/devlog/backend/internal/platform/logger"
 )
 
 // articleCreatePermission is the IAM permission (resource:action) required to
@@ -172,7 +172,7 @@ func (a *API) createArticle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !allowed {
-		log.Printf("article create denied sub=%s trace=%s", u.Sub, traceIDFrom(r.Context()))
+		logger.From(r.Context()).Warn("article create denied", "sub", u.Sub)
 		writeError(w, r, apierr.ErrArticleForbidden)
 		return
 	}
@@ -271,7 +271,7 @@ func (a *API) createArticle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("article created slug=%s sub=%s trace=%s", created.Slug, u.Sub, traceIDFrom(r.Context()))
+	logger.From(r.Context()).Info("article created", "slug", created.Slug, "sub", u.Sub)
 	writeJSON(w, r, http.StatusCreated, articleDetail{
 		articleSummary: toSummary(created),
 		Body:           created.Body,

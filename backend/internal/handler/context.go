@@ -1,22 +1,27 @@
 package handler
 
-import "context"
+import (
+	"context"
+
+	"github.com/ndmt1at21/devlog/backend/internal/platform/logger"
+)
 
 type ctxKey int
 
 const (
 	userCtxKey ctxKey = iota
-	traceCtxKey
 )
 
+// withTraceID / traceIDFrom store the request trace id in context. They
+// delegate to the logger package so the trace id lives in one place and stays
+// consistent with the request-scoped logger attached alongside it.
 func withTraceID(ctx context.Context, id string) context.Context {
-	return context.WithValue(ctx, traceCtxKey, id)
+	return logger.WithTraceID(ctx, id)
 }
 
 // traceIDFrom returns the request's trace id, or "" if unset.
 func traceIDFrom(ctx context.Context) string {
-	id, _ := ctx.Value(traceCtxKey).(string)
-	return id
+	return logger.TraceID(ctx)
 }
 
 // SessionUser is the authenticated user attached to a request by the auth

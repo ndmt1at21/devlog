@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/ndmt1at21/devlog/backend/internal/domain"
 	"github.com/ndmt1at21/devlog/backend/internal/payment"
 	"github.com/ndmt1at21/devlog/backend/internal/platform/id"
+	"github.com/ndmt1at21/devlog/backend/internal/platform/logger"
 )
 
 // allowedCoffeeAmounts are the fixed donation presets (VND). The amount is
@@ -78,7 +78,7 @@ func (a *API) coffeeCheckout(w http.ResponseWriter, r *http.Request) {
 			CancelURL:   cancelURL,
 		})
 		if err != nil {
-			log.Printf("stripe checkout: %v", err)
+			logger.From(r.Context()).Error("stripe checkout", "err", err.Error(), "order", order.ID)
 			writeError(w, r, apierr.ErrCoffeeCheckoutCard)
 			return
 		}
@@ -105,7 +105,7 @@ func (a *API) coffeeCheckout(w http.ResponseWriter, r *http.Request) {
 			IpnURL:      strings.TrimRight(publicBackendURL(r), "/") + apiV1 + "/webhooks/momo",
 		})
 		if err != nil {
-			log.Printf("momo create: %v", err)
+			logger.From(r.Context()).Error("momo create", "err", err.Error(), "order", order.ID)
 			writeError(w, r, apierr.ErrCoffeeCheckoutMomo)
 			return
 		}
@@ -143,7 +143,7 @@ func (a *API) coffeeStatus(w http.ResponseWriter, r *http.Request) {
 	if order.Status == domain.CoffeePending {
 		if next := a.reconcile(r, order); next != "" && next != order.Status {
 			if err := a.Store.CoffeeOrders().UpdateStatus(r.Context(), order.ID, next); err != nil {
-				log.Printf("coffee update status: %v", err)
+				logger.From(r.Context()).Error("coffee update status", "err", err.Error(), "order", order.ID)
 			} else {
 				order.Status = next
 			}
@@ -167,7 +167,7 @@ func (a *API) reconcile(r *http.Request, order domain.CoffeeOrder) string {
 		}
 		paid, err := a.Stripe.SessionPaid(r.Context(), order.StripeSessionID)
 		if err != nil {
-			log.Printf("stripe reconcile: %v", err)
+			logger.From(r.Context()).Warn("stripe reconcile", "err", err.Error(), "order", order.ID)
 			return ""
 		}
 		if paid {
@@ -179,7 +179,7 @@ func (a *API) reconcile(r *http.Request, order domain.CoffeeOrder) string {
 		}
 		st, err := a.Momo.QueryStatus(r.Context(), order.MomoOrderID, order.MomoRequestID)
 		if err != nil {
-			log.Printf("momo reconcile: %v", err)
+			logger.From(r.Context()).Warn("momo reconcile", "err", err.Error(), "order", order.ID)
 			return ""
 		}
 		return st // payment.Status* values match domain.Coffee* values
@@ -201,13 +201,13 @@ func (a *API) stripeWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	eventType, orderID, err := a.Stripe.VerifyWebhook(body, r.Header.Get("Stripe-Signature"))
 	if err != nil {
-		log.Printf("stripe webhook: %v", err)
+		logger.From(r.Context()).Warn("stripe webhook rejected", "err", err.Error())
 		http.Error(w, "invalid signature", http.StatusBadRequest)
 		return
 	}
 	if eventType == "checkout.session.completed" && orderID != "" {
 		if err := a.Store.CoffeeOrders().UpdateStatus(r.Context(), orderID, domain.CoffeeCompleted); err != nil {
-			log.Printf("stripe webhook update: %v", err)
+			logger.From(r.Context()).Error("stripe webhook update", "err", err.Error(), "order", orderID)
 		}
 	}
 	w.WriteHeader(http.StatusOK)
@@ -226,7 +226,7 @@ func (a *API) momoWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	ipn, ok, err := a.Momo.VerifyIPN(body)
 	if err != nil || !ok {
-		log.Printf("momo webhook: invalid (err=%v ok=%v)", err, ok)
+		logger.From(r.Context()).Warn("momo webhook rejected", "err", err, "ok", ok)
 		http.Error(w, "invalid signature", http.StatusBadRequest)
 		return
 	}
@@ -235,7 +235,7 @@ func (a *API) momoWebhook(w http.ResponseWriter, r *http.Request) {
 		status = domain.CoffeeCompleted
 	}
 	if err := a.Store.CoffeeOrders().UpdateStatus(r.Context(), ipn.OrderID, status); err != nil {
-		log.Printf("momo webhook update: %v", err)
+		logger.From(r.Context()).Error("momo webhook update", "err", err.Error(), "order", ipn.OrderID)
 	}
 	// MoMo expects a 204 acknowledgement.
 	w.WriteHeader(http.StatusNoContent)
