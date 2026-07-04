@@ -1,24 +1,23 @@
-// OAuth passthrough for the Google login flow (/login and /callback). The
+// Passthrough proxy for the Google OAuth endpoints (login/callback). The
 // generic /api/:path* rewrite (next.config.ts) is served by fetch() inside the
 // Cloudflare Worker, which follows the backend's 302 to accounts.google.com
 // server-side — the browser gets Google's HTML under our domain and the
 // state/session Set-Cookie on the redirect response is dropped. These two
 // endpoints are top-level browser navigations whose redirects and cookies must
-// reach the browser untouched, so they are proxied here with redirect:
-// "manual". App routes match before afterFiles rewrites, so all other /api
-// traffic keeps using the rewrite.
-import { NextRequest } from "next/server";
+// reach the browser untouched, so they go through this manual-redirect proxy
+// instead.
+//
+// The route files calling this MUST stay static (literal login/ and callback/
+// segments, no [param]): afterFiles rewrites are matched BEFORE dynamic
+// routes, so a dynamic segment here silently loses to the /api/:path* rewrite
+// and the Worker follows the redirect again.
+import "server-only";
+import type { NextRequest } from "next/server";
 
-const actions = new Set(["login", "callback"]);
-
-export async function GET(
+export async function proxyGoogleAuth(
   req: NextRequest,
-  { params }: { params: Promise<{ action: string }> },
-) {
-  const { action } = await params;
-  if (!actions.has(action)) {
-    return new Response("Not found", { status: 404 });
-  }
+  action: "login" | "callback",
+): Promise<Response> {
   const backend = process.env.BACKEND_INTERNAL_URL || "http://localhost:8080";
   const cookie = req.headers.get("cookie");
   const res = await fetch(
