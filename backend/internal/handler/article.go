@@ -18,6 +18,10 @@ import (
 // publish articles. Provision it in the tenant and bind it to an author role.
 const articleCreatePermission = "articles:create"
 
+// maxCoverURLLen bounds a cover image URL to the width of the articles.cover
+// column (VARCHAR(500)).
+const maxCoverURLLen = 500
+
 // articleSummary is the list/card projection of an article (no body).
 type articleSummary struct {
 	Slug          string `json:"slug"`
@@ -158,6 +162,7 @@ type createArticleInput struct {
 	Title    string   `json:"title"`
 	Excerpt  string   `json:"excerpt"`
 	Category string   `json:"category"`
+	Cover    string   `json:"cover"`
 	Tags     []string `json:"tags"`
 	// Format selects the body payload: "markdown" (README-style, in Content) or
 	// "blocks" (structured rich-text editor output, in Body).
@@ -203,6 +208,7 @@ func (a *API) createArticle(w http.ResponseWriter, r *http.Request) {
 		Category:    c.Category,
 		Author:      u.Name,
 		AuthorID:    u.Sub,
+		Cover:       c.Cover,
 		ReadTime:    content.ReadTime(c.Body),
 		PublishedAt: time.Now().UTC(),
 		Title:       c.Title,
@@ -246,6 +252,7 @@ type articleContent struct {
 	Title    string
 	Excerpt  string
 	Category string
+	Cover    string
 	Tags     []string
 	Body     []domain.Block
 }
@@ -301,6 +308,26 @@ func (a *API) prepareArticle(in createArticleInput) (articleContent, error) {
 		return articleContent{}, err
 	}
 
+	// Cover is optional; when present it must be a well-formed image URL under
+	// the configured image origin (i.e. it came through the upload flow), and
+	// short enough for the cover column.
+	cover := strings.TrimSpace(in.Cover)
+	if cover != "" {
+		if len(cover) > maxCoverURLLen {
+			return articleContent{}, apierr.ErrValidation.WithMessage("Đường dẫn ảnh bìa quá dài.")
+		}
+		if err := content.ValidateImageURL(cover); err != nil {
+			var invalid *content.ErrInvalid
+			if errors.As(err, &invalid) {
+				return articleContent{}, apierr.ErrValidation.WithMessage("Ảnh bìa: " + invalid.Reason + ".")
+			}
+			return articleContent{}, apierr.ErrValidation
+		}
+		if !a.imageHostOK(cover) {
+			return articleContent{}, apierr.ErrImageHost
+		}
+	}
+
 	if excerpt == "" {
 		excerpt = content.DeriveExcerpt(body)
 	}
@@ -308,6 +335,7 @@ func (a *API) prepareArticle(in createArticleInput) (articleContent, error) {
 		Title:    title,
 		Excerpt:  excerpt,
 		Category: category,
+		Cover:    cover,
 		Tags:     tags,
 		Body:     body,
 	}, nil
@@ -371,6 +399,7 @@ func (a *API) updateArticle(w http.ResponseWriter, r *http.Request) {
 	existing.Title = c.Title
 	existing.Excerpt = c.Excerpt
 	existing.Category = c.Category
+	existing.Cover = c.Cover
 	existing.Tags = c.Tags
 	existing.Body = c.Body
 	existing.ReadTime = content.ReadTime(c.Body)

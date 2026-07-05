@@ -170,9 +170,9 @@ func (r *articleRepo) Update(ctx context.Context, a domain.Article) (domain.Arti
 		return domain.Article{}, err
 	}
 	if _, err := r.db.ExecContext(ctx, `UPDATE articles
-		 SET category = ?, read_time = ?, title = ?, excerpt = ?, tags = ?, body = ?, updated_at = ?
+		 SET category = ?, cover = ?, read_time = ?, title = ?, excerpt = ?, tags = ?, body = ?, updated_at = ?
 		 WHERE slug = ?`,
-		a.Category, a.ReadTime, a.Title, a.Excerpt, tags, body, timeNow(), a.Slug); err != nil {
+		a.Category, nullStr(a.Cover), a.ReadTime, a.Title, a.Excerpt, tags, body, timeNow(), a.Slug); err != nil {
 		return domain.Article{}, mapError(err)
 	}
 	return a, nil

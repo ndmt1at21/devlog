@@ -219,7 +219,7 @@ func NormalizeBlocks(in []domain.Block) ([]domain.Block, error) {
 			if b.Src == "" {
 				continue
 			}
-			if err := validateImageURL(b.Src); err != nil {
+			if err := ValidateImageURL(b.Src); err != nil {
 				return nil, invalidf("khối %d: %s", i+1, err)
 			}
 			if len(b.Alt) > MaxCaption || len(b.Caption) > MaxCaption {
@@ -236,21 +236,21 @@ func NormalizeBlocks(in []domain.Block) ([]domain.Block, error) {
 	return out, nil
 }
 
-// validateImageURL enforces the shape of an img block's Src: an absolute https
-// URL (plain http only for loopback hosts, so MinIO works in dev) within the
-// length cap. Which *origin* is allowed is deployment policy, checked in the
-// handler against the configured image base URL.
-func validateImageURL(src string) error {
+// ValidateImageURL enforces the shape of an image URL — an img block's Src or an
+// article cover: an absolute https URL (plain http only for loopback hosts, so
+// MinIO works in dev) within the length cap. Which *origin* is allowed is
+// deployment policy, checked in the handler against the configured image base URL.
+func ValidateImageURL(src string) error {
 	if len(src) > MaxURLLen {
-		return fmt.Errorf("đường dẫn ảnh quá dài (tối đa %d ký tự)", MaxURLLen)
+		return invalidf("đường dẫn ảnh quá dài (tối đa %d ký tự)", MaxURLLen)
 	}
 	u, err := url.Parse(src)
 	if err != nil || u.Host == "" {
-		return fmt.Errorf("đường dẫn ảnh không hợp lệ")
+		return invalidf("đường dẫn ảnh không hợp lệ")
 	}
 	local := u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1"
 	if u.Scheme != "https" && !(u.Scheme == "http" && local) {
-		return fmt.Errorf("đường dẫn ảnh phải dùng https")
+		return invalidf("đường dẫn ảnh phải dùng https")
 	}
 	return nil
 }

@@ -102,15 +102,17 @@ func (a *API) createUpload(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// checkImageHosts enforces that every img block points at the configured
-// public image origin, so bodies can only embed images that went through the
-// upload flow. Without IMAGE_BASE_URL (dev), any valid image URL passes.
+// imageHostOK reports whether src may be embedded: any URL passes when no public
+// image origin is configured (dev), otherwise src must live under it — so images
+// can only come from the upload flow. Shared by body img blocks and the cover.
+func (a *API) imageHostOK(src string) bool {
+	return a.Cfg.ImageBaseURL == "" || strings.HasPrefix(src, a.Cfg.ImageBaseURL+"/")
+}
+
+// checkImageHosts enforces imageHostOK for every img block in a body.
 func (a *API) checkImageHosts(blocks []domain.Block) error {
-	if a.Cfg.ImageBaseURL == "" {
-		return nil
-	}
 	for _, b := range blocks {
-		if b.Type == "img" && !strings.HasPrefix(b.Src, a.Cfg.ImageBaseURL+"/") {
+		if b.Type == "img" && !a.imageHostOK(b.Src) {
 			return apierr.ErrImageHost
 		}
 	}

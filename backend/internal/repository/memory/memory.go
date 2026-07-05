@@ -173,6 +173,7 @@ func (r *articleRepo) Update(_ context.Context, a domain.Article) (domain.Articl
 			// Overlay only the editable fields, preserving the stored row's
 			// identity, ordering and series placement.
 			ex.Category = a.Category
+			ex.Cover = a.Cover
 			ex.ReadTime = a.ReadTime
 			ex.Title = a.Title
 			ex.Excerpt = a.Excerpt
