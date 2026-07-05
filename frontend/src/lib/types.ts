@@ -39,6 +39,7 @@ export interface NewArticleInput {
   title: string;
   excerpt?: string;
   category: string;
+  cover?: string;
   tags: string[];
   format: "markdown" | "blocks";
   content?: string;

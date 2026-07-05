@@ -91,11 +91,20 @@ export function ArticleView({
         />
       )}
 
-      <div className="cover-hatch relative my-[30px] mb-3.5 flex h-[300px] items-center justify-center rounded-[14px]">
-        <span className="font-mono text-[12px] tracking-[.04em] text-mono">
-          {t("article.cover")}
-        </span>
-      </div>
+      {detail.cover ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={detail.cover}
+          alt=""
+          className="my-[30px] mb-3.5 h-[300px] w-full rounded-[14px] border border-border object-cover"
+        />
+      ) : (
+        <div className="cover-hatch relative my-[30px] mb-3.5 flex h-[300px] items-center justify-center rounded-[14px]">
+          <span className="font-mono text-[12px] tracking-[.04em] text-mono">
+            {t("article.cover")}
+          </span>
+        </div>
+      )}
 
       {/* break-words (inherited) keeps long URLs/identifiers from overflowing
           the measure on small screens; pre/code are unaffected (nowrap). */}

@@ -48,11 +48,20 @@ export function FeaturedCard({
           <span>{article.read}</span>
         </div>
       </div>
-      <div className="cover-hatch relative flex min-h-[220px] items-center justify-center rounded-xl">
-        <span className="font-mono text-[12px] tracking-[.04em] text-mono">
-          {t("home.cover")}
-        </span>
-      </div>
+      {article.cover ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={article.cover}
+          alt=""
+          className="min-h-[220px] w-full rounded-xl border border-border object-cover"
+        />
+      ) : (
+        <div className="cover-hatch relative flex min-h-[220px] items-center justify-center rounded-xl">
+          <span className="font-mono text-[12px] tracking-[.04em] text-mono">
+            {t("home.cover")}
+          </span>
+        </div>
+      )}
     </Link>
   );
 }

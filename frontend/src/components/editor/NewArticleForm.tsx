@@ -170,6 +170,10 @@ export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
   const [busy, setBusy] = useState(false);
   // True while the markdown-mode toolbar upload is in flight.
   const [mdUploading, setMdUploading] = useState(false);
+  // Cover image: the public CDN URL and its in-flight upload state. Prefilled
+  // from the article in edit mode.
+  const [cover, setCover] = useState(article?.cover ?? "");
+  const [coverUploading, setCoverUploading] = useState(false);
 
   // Last-focused text field, so the inline-format toolbar knows its target.
   const activeField = useRef<HTMLTextAreaElement | null>(null);
@@ -313,6 +317,22 @@ export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
     });
   };
 
+  // Cover upload: same presigned direct-to-R2 flow as body images; stores the
+  // returned public CDN URL.
+  const uploadCover = async (file: File) => {
+    const invalid = validateImage(file);
+    if (invalid) return setError(invalid);
+    setError("");
+    setCoverUploading(true);
+    try {
+      setCover(await uploadImage(file));
+    } catch (err) {
+      uploadError(err);
+    } finally {
+      setCoverUploading(false);
+    }
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -328,6 +348,7 @@ export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
       title: title.trim(),
       excerpt: excerpt.trim() || undefined,
       category: category.trim(),
+      cover: cover.trim() || undefined,
       tags,
     };
     let payload: NewArticleInput;
@@ -427,6 +448,56 @@ export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
           placeholder={t("editor.excerptPlaceholder")}
           className={`${fieldCls} mb-[22px] resize-y`}
         />
+
+        {/* --- cover image (optional) --- */}
+        <span className={labelCls}>{t("editor.coverLabel")}</span>
+        <div className="mb-[22px]">
+          {cover && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={cover}
+              alt=""
+              className="mb-2.5 h-[200px] w-full rounded-[10px] border border-border object-cover"
+            />
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <label
+              aria-busy={coverUploading}
+              className={`inline-flex items-center gap-2 rounded-[9px] border border-border2 px-4 py-2 text-[13.5px] font-semibold text-c5b transition-colors hover:border-hover hover:text-strong ${
+                coverUploading ? "cursor-wait opacity-60" : "cursor-pointer"
+              }`}
+            >
+              {coverUploading
+                ? t("editor.uploading")
+                : cover
+                  ? t("editor.replaceImage")
+                  : t("editor.coverUpload")}
+              <input
+                type="file"
+                accept={IMAGE_ACCEPT}
+                disabled={coverUploading}
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) void uploadCover(file);
+                }}
+              />
+            </label>
+            {cover && (
+              <button
+                type="button"
+                onClick={() => setCover("")}
+                className="cursor-pointer rounded-[9px] border border-border2 px-4 py-2 text-[13.5px] font-semibold text-c5b transition-colors hover:border-hover hover:text-strong"
+              >
+                {t("editor.coverRemove")}
+              </button>
+            )}
+          </div>
+          <p className="mt-2 text-[12.5px] leading-[1.6] text-subtle">
+            {t("editor.coverHint")}
+          </p>
+        </div>
 
         {/* --- format mode --- */}
         <div
