@@ -55,8 +55,8 @@ func TestPresignPutShape(t *testing.T) {
 		t.Errorf("host/path = %s %s", u.Host, u.Path)
 	}
 	q := u.Query()
-	if got := q.Get("X-Amz-SignedHeaders"); got != "content-length;content-type;host" {
-		t.Errorf("SignedHeaders = %q, want content-length;content-type;host", got)
+	if got := q.Get("X-Amz-SignedHeaders"); got != "content-type;host" {
+		t.Errorf("SignedHeaders = %q, want content-type;host", got)
 	}
 	if got := q.Get("X-Amz-Expires"); got != "600" {
 		t.Errorf("Expires = %q, want 600", got)

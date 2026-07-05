@@ -28,9 +28,15 @@ type Signer struct {
 }
 
 // PresignPut returns a URL that lets its holder PUT exactly one object: the
-// key, content type and byte size are all signed, so none can be swapped after
-// the caller's validation. The client must send matching Content-Type and
-// Content-Length headers (browsers set the latter from the request body).
+// key and content type are signed, so neither can be swapped after the
+// caller's validation. The client must send a matching Content-Type header.
+//
+// Content-Length is deliberately NOT signed. R2 verifies a signed
+// content-length header inconsistently — signing it makes browser PUTs fail
+// with 403/SignatureDoesNotMatch even when the byte count matches. Size is
+// already validated server-side before signing, and the object key is
+// server-generated and single-use, so leaving Content-Length unsigned only
+// loosens the byte-exact cap at the bucket, not the authorization gate.
 func (s Signer) PresignPut(key, contentType string, size int64, expires time.Duration, now time.Time) (string, error) {
 	u, err := url.Parse(s.Endpoint)
 	if err != nil || u.Scheme == "" || u.Host == "" {
@@ -38,7 +44,6 @@ func (s Signer) PresignPut(key, contentType string, size int64, expires time.Dur
 	}
 	path := "/" + s.Bucket + "/" + key
 	query := s.presign("PUT", u.Host, path, [][2]string{
-		{"content-length", strconv.FormatInt(size, 10)},
 		{"content-type", contentType},
 	}, expires, now)
 	return u.Scheme + "://" + u.Host + escapePath(path) + "?" + query, nil

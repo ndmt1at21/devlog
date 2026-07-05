@@ -93,13 +93,14 @@ func TestCreateUploadTicket(t *testing.T) {
 		t.Errorf("uploadUrl host/path = %s %s", u.Host, u.Path)
 	}
 	// The object key of both URLs must agree, and the signature must pin the
-	// validated content type and byte size.
+	// validated content type (Content-Length is intentionally not signed — R2
+	// verifies it inconsistently and rejects otherwise-valid PUTs).
 	key := strings.TrimPrefix(u.Path, "/devlog-images/")
 	if got := strings.TrimPrefix(ticket.PublicURL, "https://img.example.com/"); got != key {
 		t.Errorf("public key %q != upload key %q", got, key)
 	}
 	q := u.Query()
-	if q.Get("X-Amz-SignedHeaders") != "content-length;content-type;host" {
+	if q.Get("X-Amz-SignedHeaders") != "content-type;host" {
 		t.Errorf("SignedHeaders = %q", q.Get("X-Amz-SignedHeaders"))
 	}
 	if len(q.Get("X-Amz-Signature")) != 64 {
