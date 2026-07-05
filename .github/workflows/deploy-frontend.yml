@@ -79,8 +79,10 @@ jobs:
           BACKEND_INTERNAL_URL: ${{ secrets.BACKEND_INTERNAL_URL }}
           NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
           NEXT_PUBLIC_GA_ID: ${{ secrets.NEXT_PUBLIC_GA_ID }}
-          NEXT_PUBLIC_GAM_NETWORK_CODE: ${{ secrets.NEXT_PUBLIC_GAM_NETWORK_CODE }}
-          NEXT_PUBLIC_GAM_AD_UNIT: ${{ secrets.NEXT_PUBLIC_GAM_AD_UNIT }}
+          # Google AdSense — inlined into the client bundle at build time (src/lib/ads.ts).
+          # Both must be set (PROD env secrets) or the in-content slot keeps its placeholder.
+          NEXT_PUBLIC_ADSENSE_CLIENT: ${{ secrets.NEXT_PUBLIC_ADSENSE_CLIENT }}
+          NEXT_PUBLIC_ADSENSE_SLOT: ${{ secrets.NEXT_PUBLIC_ADSENSE_SLOT }}
           NEXT_PUBLIC_PRO_ENABLED: ${{ secrets.NEXT_PUBLIC_PRO_ENABLED }}
           NEXT_PUBLIC_DONATE_ENABLED: ${{ secrets.NEXT_PUBLIC_DONATE_ENABLED }}
           NEXT_PUBLIC_PAYPAL_DONATE_URL: ${{ secrets.NEXT_PUBLIC_PAYPAL_DONATE_URL }}
