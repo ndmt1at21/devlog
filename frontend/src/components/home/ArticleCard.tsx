@@ -33,7 +33,7 @@ export function ArticleCard({
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={article.cover}
-          alt=""
+          alt={article.coverAlt ?? ""}
           className="mb-4 h-[172px] w-full rounded-[10px] border border-border object-cover"
         />
       ) : (

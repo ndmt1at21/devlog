@@ -15,18 +15,19 @@ type articleRepo struct{ db *sql.DB }
 // scanner abstracts *sql.Row and *sql.Rows.
 type scanner interface{ Scan(dest ...any) error }
 
-const articleSummaryCols = `slug, ord, featured, category, author, read_time, published_at, title, excerpt, cover, tags, series_slug, series_part, part_title`
+const articleSummaryCols = `slug, ord, featured, category, author, read_time, published_at, title, excerpt, cover, cover_alt, tags, series_slug, series_part, part_title`
 
 func scanArticleSummary(sc scanner) (domain.Article, error) {
 	var a domain.Article
-	var cover, seriesSlug, partTitle sql.NullString
+	var cover, coverAlt, seriesSlug, partTitle sql.NullString
 	var seriesPart sql.NullInt64
 	var tags []byte
 	if err := sc.Scan(&a.Slug, &a.Ord, &a.Featured, &a.Category, &a.Author, &a.ReadTime,
-		&a.PublishedAt, &a.Title, &a.Excerpt, &cover, &tags, &seriesSlug, &seriesPart, &partTitle); err != nil {
+		&a.PublishedAt, &a.Title, &a.Excerpt, &cover, &coverAlt, &tags, &seriesSlug, &seriesPart, &partTitle); err != nil {
 		return domain.Article{}, err
 	}
 	a.Cover = cover.String
+	a.CoverAlt = coverAlt.String
 	a.Series = seriesSlug.String
 	a.Part = int(seriesPart.Int64)
 	a.PartTitle = partTitle.String
@@ -73,14 +74,15 @@ func (r *articleRepo) List(ctx context.Context, f domain.ArticleFilter) ([]domai
 func (r *articleRepo) GetBySlug(ctx context.Context, slug string) (domain.Article, error) {
 	row := r.db.QueryRowContext(ctx, "SELECT "+articleSummaryCols+", author_id, body FROM articles WHERE slug = ?", slug)
 	var a domain.Article
-	var cover, seriesSlug, partTitle, authorID sql.NullString
+	var cover, coverAlt, seriesSlug, partTitle, authorID sql.NullString
 	var seriesPart sql.NullInt64
 	var tags, body []byte
 	if err := row.Scan(&a.Slug, &a.Ord, &a.Featured, &a.Category, &a.Author, &a.ReadTime,
-		&a.PublishedAt, &a.Title, &a.Excerpt, &cover, &tags, &seriesSlug, &seriesPart, &partTitle, &authorID, &body); err != nil {
+		&a.PublishedAt, &a.Title, &a.Excerpt, &cover, &coverAlt, &tags, &seriesSlug, &seriesPart, &partTitle, &authorID, &body); err != nil {
 		return domain.Article{}, mapError(err)
 	}
 	a.Cover = cover.String
+	a.CoverAlt = coverAlt.String
 	a.AuthorID = authorID.String
 	a.Series = seriesSlug.String
 	a.Part = int(seriesPart.Int64)
@@ -145,10 +147,10 @@ func (r *articleRepo) Create(ctx context.Context, a domain.Article) (domain.Arti
 	// INSERT … SELECT computes Ord = max+1 atomically against the same table
 	// (aggregate SELECT yields exactly one row even when the table is empty).
 	if _, err := r.db.ExecContext(ctx, `INSERT INTO articles
-		 (id, slug, ord, featured, category, author, author_id, read_time, published_at, title, excerpt, cover, tags, series_slug, series_part, part_title, body, created_at, updated_at)
-		 SELECT ?, ?, COALESCE(MAX(ord), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM articles`,
+		 (id, slug, ord, featured, category, author, author_id, read_time, published_at, title, excerpt, cover, cover_alt, tags, series_slug, series_part, part_title, body, created_at, updated_at)
+		 SELECT ?, ?, COALESCE(MAX(ord), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM articles`,
 		a.ID, a.Slug, a.Featured, a.Category, a.Author, nullStr(a.AuthorID), a.ReadTime, a.PublishedAt, a.Title, a.Excerpt,
-		nullStr(a.Cover), tags, nullStr(a.Series), nullInt(a.Part), nullStr(a.PartTitle), body, now, now); err != nil {
+		nullStr(a.Cover), nullStr(a.CoverAlt), tags, nullStr(a.Series), nullInt(a.Part), nullStr(a.PartTitle), body, now, now); err != nil {
 		return domain.Article{}, mapError(err)
 	}
 	return a, nil
@@ -170,9 +172,9 @@ func (r *articleRepo) Update(ctx context.Context, a domain.Article) (domain.Arti
 		return domain.Article{}, err
 	}
 	if _, err := r.db.ExecContext(ctx, `UPDATE articles
-		 SET category = ?, cover = ?, read_time = ?, title = ?, excerpt = ?, tags = ?, body = ?, updated_at = ?
+		 SET category = ?, cover = ?, cover_alt = ?, read_time = ?, title = ?, excerpt = ?, tags = ?, body = ?, updated_at = ?
 		 WHERE slug = ?`,
-		a.Category, nullStr(a.Cover), a.ReadTime, a.Title, a.Excerpt, tags, body, timeNow(), a.Slug); err != nil {
+		a.Category, nullStr(a.Cover), nullStr(a.CoverAlt), a.ReadTime, a.Title, a.Excerpt, tags, body, timeNow(), a.Slug); err != nil {
 		return domain.Article{}, mapError(err)
 	}
 	return a, nil

@@ -95,7 +95,7 @@ export function ArticleView({
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={detail.cover}
-          alt=""
+          alt={detail.coverAlt ?? ""}
           className="my-[30px] mb-3.5 h-[300px] w-full rounded-[14px] border border-border object-cover"
         />
       ) : (

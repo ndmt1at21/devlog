@@ -40,6 +40,7 @@ export interface NewArticleInput {
   excerpt?: string;
   category: string;
   cover?: string;
+  coverAlt?: string;
   tags: string[];
   format: "markdown" | "blocks";
   content?: string;
@@ -59,6 +60,7 @@ export interface ArticleSummary {
   publishedAt: string;
   tags: string[];
   cover?: string;
+  coverAlt?: string;
   featured: boolean;
   isSeries: boolean;
   series?: string;

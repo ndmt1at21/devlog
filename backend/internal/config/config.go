@@ -86,10 +86,12 @@ func Load() (Config, error) {
 		MomoQueryEndpoint:  env("MOMO_QUERY_ENDPOINT", "https://test-payment.momo.vn/v3/gateway/api/query"),
 
 		S3Endpoint:        strings.TrimRight(os.Getenv("S3_ENDPOINT"), "/"),
-		S3Bucket:          os.Getenv("S3_BUCKET"),
-		S3Region:          env("S3_REGION", "auto"),
-		S3AccessKeyID:     os.Getenv("S3_ACCESS_KEY_ID"),
-		S3SecretAccessKey: os.Getenv("S3_SECRET_ACCESS_KEY"),
+		S3Bucket:          strings.TrimSpace(os.Getenv("S3_BUCKET")),
+		S3Region:          strings.TrimSpace(env("S3_REGION", "auto")),
+		// Credentials are trimmed: a trailing newline pasted into an env/secret
+		// silently corrupts the SigV4 key and yields 403/SignatureDoesNotMatch.
+		S3AccessKeyID:     strings.TrimSpace(os.Getenv("S3_ACCESS_KEY_ID")),
+		S3SecretAccessKey: strings.TrimSpace(os.Getenv("S3_SECRET_ACCESS_KEY")),
 		ImageBaseURL:      strings.TrimRight(os.Getenv("IMAGE_BASE_URL"), "/"),
 	}
 

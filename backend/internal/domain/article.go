@@ -48,6 +48,7 @@ type Article struct {
 	Title       string    `json:"title"`
 	Excerpt     string    `json:"excerpt"`
 	Cover       string    `json:"cover,omitempty"`
+	CoverAlt    string    `json:"coverAlt,omitempty"`
 	Tags        []string  `json:"tags"`
 	Series      string    `json:"series,omitempty"`
 	Part        int       `json:"part,omitempty"`

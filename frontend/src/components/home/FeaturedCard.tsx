@@ -52,7 +52,7 @@ export function FeaturedCard({
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={article.cover}
-          alt=""
+          alt={article.coverAlt ?? ""}
           className="min-h-[220px] w-full rounded-xl border border-border object-cover"
         />
       ) : (

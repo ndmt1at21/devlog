@@ -173,6 +173,7 @@ export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
   // Cover image: the public CDN URL and its in-flight upload state. Prefilled
   // from the article in edit mode.
   const [cover, setCover] = useState(article?.cover ?? "");
+  const [coverAlt, setCoverAlt] = useState(article?.coverAlt ?? "");
   const [coverUploading, setCoverUploading] = useState(false);
 
   // Last-focused text field, so the inline-format toolbar knows its target.
@@ -349,6 +350,7 @@ export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
       excerpt: excerpt.trim() || undefined,
       category: category.trim(),
       cover: cover.trim() || undefined,
+      coverAlt: cover.trim() ? coverAlt.trim() || undefined : undefined,
       tags,
     };
     let payload: NewArticleInput;
@@ -456,7 +458,7 @@ export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={cover}
-              alt=""
+              alt={coverAlt}
               className="mb-2.5 h-[200px] w-full rounded-[10px] border border-border object-cover"
             />
           )}
@@ -494,6 +496,21 @@ export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
               </button>
             )}
           </div>
+          {cover && (
+            <>
+              <label htmlFor="cover-alt" className="sr-only">
+                {t("editor.coverAltLabel")}
+              </label>
+              <input
+                id="cover-alt"
+                value={coverAlt}
+                maxLength={300}
+                onChange={(e) => setCoverAlt(e.target.value)}
+                placeholder={t("editor.coverAltPlaceholder")}
+                className={`${fieldCls} mt-2.5`}
+              />
+            </>
+          )}
           <p className="mt-2 text-[12.5px] leading-[1.6] text-subtle">
             {t("editor.coverHint")}
           </p>

@@ -22,6 +22,10 @@ const articleCreatePermission = "articles:create"
 // column (VARCHAR(500)).
 const maxCoverURLLen = 500
 
+// maxCoverAltLen bounds the cover alt text to the width of the
+// articles.cover_alt column (VARCHAR(300)), matching the in-article image alt.
+const maxCoverAltLen = 300
+
 // articleSummary is the list/card projection of an article (no body).
 type articleSummary struct {
 	Slug          string `json:"slug"`
@@ -38,6 +42,7 @@ type articleSummary struct {
 	PublishedAt time.Time `json:"publishedAt"`
 	Tags        []string  `json:"tags"`
 	Cover       string    `json:"cover,omitempty"`
+	CoverAlt    string    `json:"coverAlt,omitempty"`
 	Featured    bool      `json:"featured"`
 	IsSeries    bool      `json:"isSeries"`
 	Series      string    `json:"series,omitempty"`
@@ -80,7 +85,7 @@ func toSummary(a domain.Article) articleSummary {
 		Slug: a.Slug, Title: a.Title, Excerpt: a.Excerpt, Category: a.Category,
 		Author: a.Author, AuthorInitial: initial(a.Author), Read: a.ReadTime,
 		Date: formatVNDate(a.PublishedAt), PublishedAt: a.PublishedAt,
-		Tags: a.Tags, Cover: a.Cover, Featured: a.Featured,
+		Tags: a.Tags, Cover: a.Cover, CoverAlt: a.CoverAlt, Featured: a.Featured,
 	}
 	if a.Series != "" {
 		s.IsSeries = true
@@ -163,6 +168,7 @@ type createArticleInput struct {
 	Excerpt  string   `json:"excerpt"`
 	Category string   `json:"category"`
 	Cover    string   `json:"cover"`
+	CoverAlt string   `json:"coverAlt"`
 	Tags     []string `json:"tags"`
 	// Format selects the body payload: "markdown" (README-style, in Content) or
 	// "blocks" (structured rich-text editor output, in Body).
@@ -209,6 +215,7 @@ func (a *API) createArticle(w http.ResponseWriter, r *http.Request) {
 		Author:      u.Name,
 		AuthorID:    u.Sub,
 		Cover:       c.Cover,
+		CoverAlt:    c.CoverAlt,
 		ReadTime:    content.ReadTime(c.Body),
 		PublishedAt: time.Now().UTC(),
 		Title:       c.Title,
@@ -253,6 +260,7 @@ type articleContent struct {
 	Excerpt  string
 	Category string
 	Cover    string
+	CoverAlt string
 	Tags     []string
 	Body     []domain.Block
 }
@@ -328,6 +336,16 @@ func (a *API) prepareArticle(in createArticleInput) (articleContent, error) {
 		}
 	}
 
+	// Cover alt text is plain accessibility copy; only meaningful alongside a
+	// cover, so it is dropped when there is no cover image.
+	coverAlt := strings.TrimSpace(in.CoverAlt)
+	if cover == "" {
+		coverAlt = ""
+	}
+	if len(coverAlt) > maxCoverAltLen {
+		return articleContent{}, apierr.ErrValidation.WithMessage("Mô tả ảnh bìa tối đa 300 ký tự.")
+	}
+
 	if excerpt == "" {
 		excerpt = content.DeriveExcerpt(body)
 	}
@@ -336,6 +354,7 @@ func (a *API) prepareArticle(in createArticleInput) (articleContent, error) {
 		Excerpt:  excerpt,
 		Category: category,
 		Cover:    cover,
+		CoverAlt: coverAlt,
 		Tags:     tags,
 		Body:     body,
 	}, nil
@@ -400,6 +419,7 @@ func (a *API) updateArticle(w http.ResponseWriter, r *http.Request) {
 	existing.Excerpt = c.Excerpt
 	existing.Category = c.Category
 	existing.Cover = c.Cover
+	existing.CoverAlt = c.CoverAlt
 	existing.Tags = c.Tags
 	existing.Body = c.Body
 	existing.ReadTime = content.ReadTime(c.Body)
