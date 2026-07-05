@@ -10,6 +10,13 @@
     "binding": "ASSETS",
     "directory": ".open-next/assets"
   },
+  // Cloudflare Images binding that powers next/image optimization on the Workers
+  // runtime: OpenNext routes /_next/image through env.IMAGES. Without it the
+  // adapter throws "env.IMAGES binding is not defined" whenever an <Image>
+  // renders. Requires Image Transformations to be enabled for the zone.
+  "images": {
+    "binding": "IMAGES"
+  },
   "observability": {
     "enabled": true
   },
