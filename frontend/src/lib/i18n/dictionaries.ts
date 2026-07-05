@@ -129,6 +129,16 @@ const vi: Dict = {
     errImageType: "Chỉ hỗ trợ ảnh JPEG, PNG, WebP, GIF hoặc AVIF.",
     errImageSize: "Ảnh tối đa 5 MB.",
     errUpload: "Không tải được ảnh lên. Vui lòng thử lại.",
+    // --- bilingual authoring ---
+    langSection: "Ngôn ngữ bài viết",
+    langHint:
+      "Chọn ngôn ngữ để soạn nội dung. Có thể để trống một ngôn ngữ và thêm bản dịch sau. Ảnh bìa, danh mục và thẻ dùng chung.",
+    sharedHint: "Dùng chung cho mọi ngôn ngữ",
+    langHasContent: "Đã có nội dung",
+    langNoContent: "Chưa có nội dung",
+    insertImageBlock: "Chèn ảnh",
+    errIncompleteLang: "Vui lòng nhập đủ tiêu đề và nội dung cho bản {lang}.",
+    errNoContent: "Cần ít nhất một ngôn ngữ có tiêu đề và nội dung.",
   },
   search: {
     searching: "Đang tìm…",
@@ -420,6 +430,16 @@ const en: Dict = {
     errImageType: "Only JPEG, PNG, WebP, GIF or AVIF images are supported.",
     errImageSize: "Images can be at most 5 MB.",
     errUpload: "Couldn’t upload the image. Please try again.",
+    // --- bilingual authoring ---
+    langSection: "Article language",
+    langHint:
+      "Pick a language to write in. You can leave one empty and add the translation later. Cover, category and tags are shared.",
+    sharedHint: "Shared across languages",
+    langHasContent: "Has content",
+    langNoContent: "No content yet",
+    insertImageBlock: "Insert image",
+    errIncompleteLang: "Please provide both a title and content for the {lang} version.",
+    errNoContent: "At least one language needs a title and content.",
   },
   search: {
     searching: "Searching…",

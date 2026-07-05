@@ -85,7 +85,7 @@ func (r *seriesRepo) GetBySlug(_ context.Context, slug string) (domain.Series, e
 
 type articleRepo Store
 
-func summary(a domain.Article) domain.Article { a.Body = nil; return a }
+func summary(a domain.Article) domain.Article { a.Body = nil; a.Translations = nil; return a }
 
 func (r *articleRepo) List(_ context.Context, f domain.ArticleFilter) ([]domain.Article, error) {
 	r.mu.RLock()
@@ -172,13 +172,16 @@ func (r *articleRepo) Update(_ context.Context, a domain.Article) (domain.Articl
 		if ex.Slug == a.Slug {
 			// Overlay only the editable fields, preserving the stored row's
 			// identity, ordering and series placement.
+			ex.Lang = a.Lang
 			ex.Category = a.Category
 			ex.Cover = a.Cover
+			ex.CoverAlt = a.CoverAlt
 			ex.ReadTime = a.ReadTime
 			ex.Title = a.Title
 			ex.Excerpt = a.Excerpt
 			ex.Tags = a.Tags
 			ex.Body = a.Body
+			ex.Translations = a.Translations
 			r.articles[i] = ex
 			return ex, nil
 		}

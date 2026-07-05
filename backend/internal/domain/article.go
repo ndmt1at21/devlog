@@ -29,11 +29,24 @@ type Series struct {
 	Description string `json:"description"`
 }
 
+// Translation is one non-primary language variant of an article. Only the
+// language-specific content is translated; the cover image, category, tags and
+// series placement are shared with the primary language (Article's base fields).
+type Translation struct {
+	Title    string  `json:"title"`
+	Excerpt  string  `json:"excerpt"`
+	CoverAlt string  `json:"coverAlt,omitempty"`
+	Body     []Block `json:"body"`
+}
+
 // Article is the core content entity. Slug is the public identifier used in URLs
 // and the API (e.g. "ai-agents"); ID is the internal CHAR(36) UUID.
 type Article struct {
 	ID       string `json:"-"`
 	Slug     string `json:"slug"`
+	// Lang is the language of the base content fields (Title, Excerpt, Body,
+	// CoverAlt) — "vi" or "en". Empty is treated as "vi" for legacy/seed rows.
+	Lang     string `json:"lang"`
 	Ord      int    `json:"-"`
 	Featured bool   `json:"featured"`
 	Category string `json:"category"`
@@ -54,6 +67,9 @@ type Article struct {
 	Part        int       `json:"part,omitempty"`
 	PartTitle   string    `json:"ptitle,omitempty"`
 	Body        []Block   `json:"body"`
+	// Translations holds the non-primary language variants, keyed by locale
+	// ("en", …). Nil/empty when the article exists in one language only.
+	Translations map[string]Translation `json:"translations,omitempty"`
 }
 
 // ArticleFilter narrows a List query. An empty/"Tất cả" Category and empty Query

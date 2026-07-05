@@ -12,6 +12,12 @@ import { useMemo, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useT } from "@/lib/i18n/provider";
+import {
+  DEFAULT_LOCALE,
+  LOCALES,
+  LOCALE_LABELS,
+  type Locale,
+} from "@/lib/i18n/dictionaries";
 import { track } from "@/lib/analytics";
 import { blocksFromMarkdown } from "@/lib/markdown";
 import {
@@ -21,7 +27,12 @@ import {
   baseName,
   uploadImage,
 } from "@/lib/uploads";
-import type { ArticleDetail, Block, NewArticleInput } from "@/lib/types";
+import type {
+  ArticleDetail,
+  Block,
+  LocalizedInput,
+  NewArticleInput,
+} from "@/lib/types";
 import { BlockView } from "@/components/article/BlockRenderer";
 
 type Mode = "markdown" | "blocks";
@@ -143,6 +154,64 @@ function toBlocks(rows: EditorBlock[]): Block[] {
   return out;
 }
 
+// LangState is one language's editable content. Category, tags and the cover
+// image live outside this (shared across languages); coverAlt is per-language
+// since the alt text is translated even though the image is the same.
+interface LangState {
+  title: string;
+  excerpt: string;
+  coverAlt: string;
+  mode: Mode;
+  markdown: string;
+  rows: EditorBlock[];
+}
+
+const emptyLang = (): LangState => ({
+  title: "",
+  excerpt: "",
+  coverAlt: "",
+  mode: "markdown",
+  markdown: "",
+  rows: [newBlock()],
+});
+
+// initLangs seeds per-language editor state. In create mode every language
+// starts empty (markdown authoring). In edit mode the primary language is seeded
+// from the article's base fields and each translation from article.translations;
+// a language with stored blocks starts in "blocks" mode (markdown isn't
+// losslessly reconstructable), a still-untranslated language stays empty.
+function initLangs(article?: ArticleDetail): Record<Locale, LangState> {
+  const out = {} as Record<Locale, LangState>;
+  for (const loc of LOCALES) out[loc] = emptyLang();
+  if (!article) return out;
+
+  const primary = LOCALES.includes(article.lang as Locale)
+    ? (article.lang as Locale)
+    : DEFAULT_LOCALE;
+  out[primary] = {
+    title: article.title,
+    excerpt: article.excerpt,
+    coverAlt: article.coverAlt ?? "",
+    mode: "blocks",
+    markdown: "",
+    rows: blocksToRows(article.body),
+  };
+  for (const loc of LOCALES) {
+    const tr = article.translations?.[loc];
+    if (tr && loc !== primary) {
+      out[loc] = {
+        title: tr.title,
+        excerpt: tr.excerpt,
+        coverAlt: tr.coverAlt ?? "",
+        mode: "blocks",
+        markdown: "",
+        rows: blocksToRows(tr.body),
+      };
+    }
+  }
+  return out;
+}
+
 const fieldCls = "field px-[14px] py-3 text-[15px]";
 const labelCls = "mb-[7px] block text-[13.5px] font-semibold text-strong";
 
@@ -156,33 +225,38 @@ export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
   const t = useT();
   const editing = !!article;
 
-  const [title, setTitle] = useState(article?.title ?? "");
-  const [excerpt, setExcerpt] = useState(article?.excerpt ?? "");
+  // Per-language content; the currently edited language is `activeLang`.
+  const [langs, setLangs] = useState<Record<Locale, LangState>>(() =>
+    initLangs(article),
+  );
+  const [activeLang, setActiveLang] = useState<Locale>(() =>
+    article && LOCALES.includes(article.lang as Locale)
+      ? (article.lang as Locale)
+      : DEFAULT_LOCALE,
+  );
+
+  // Shared across languages.
   const [category, setCategory] = useState(article?.category ?? "");
   const [tagsRaw, setTagsRaw] = useState(article ? article.tags.join(", ") : "");
-  const [mode, setMode] = useState<Mode>(article ? "blocks" : "markdown");
-  const [markdown, setMarkdown] = useState("");
-  const [rows, setRows] = useState<EditorBlock[]>(() =>
-    article ? blocksToRows(article.body) : [newBlock()],
-  );
+  const [cover, setCover] = useState(article?.cover ?? "");
+  const [coverUploading, setCoverUploading] = useState(false);
+
   const [preview, setPreview] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  // True while the markdown-mode toolbar upload is in flight.
+  // In-flight body-image uploads: markdown toolbar vs. blocks "insert image".
   const [mdUploading, setMdUploading] = useState(false);
-  // Cover image: the public CDN URL and its in-flight upload state. Prefilled
-  // from the article in edit mode.
-  const [cover, setCover] = useState(article?.cover ?? "");
-  const [coverAlt, setCoverAlt] = useState(article?.coverAlt ?? "");
-  const [coverUploading, setCoverUploading] = useState(false);
+  const [insertingImage, setInsertingImage] = useState(false);
 
   // Last-focused text field, so the inline-format toolbar knows its target.
   const activeField = useRef<HTMLTextAreaElement | null>(null);
 
-  const previewBlocks = useMemo<Block[]>(
-    () => (mode === "markdown" ? blocksFromMarkdown(markdown) : toBlocks(rows)),
-    [mode, markdown, rows],
-  );
+  const previewBlocks = useMemo<Block[]>(() => {
+    const s = langs[activeLang];
+    return s.mode === "markdown"
+      ? blocksFromMarkdown(s.markdown)
+      : toBlocks(s.rows);
+  }, [langs, activeLang]);
 
   if (!user) {
     if (loading) {
@@ -219,6 +293,45 @@ export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
       <Notice title={t("editor.notAuthorTitle")} body={t("editor.notAuthor")} />
     );
   }
+
+  // Accessors bound to the active language, so the field/block JSX below stays
+  // language-agnostic. Setters patch only the active language's slice.
+  const cur = langs[activeLang];
+  const title = cur.title;
+  const excerpt = cur.excerpt;
+  const coverAlt = cur.coverAlt;
+  const mode = cur.mode;
+  const markdown = cur.markdown;
+  const rows = cur.rows;
+
+  const patchLang = (patch: Partial<LangState>) =>
+    setLangs((ls) => ({ ...ls, [activeLang]: { ...ls[activeLang], ...patch } }));
+  const setTitle = (v: string) => patchLang({ title: v });
+  const setExcerpt = (v: string) => patchLang({ excerpt: v });
+  const setCoverAlt = (v: string) => patchLang({ coverAlt: v });
+  const setMode = (v: Mode) => patchLang({ mode: v });
+  const setMarkdown = (v: string | ((s: string) => string)) =>
+    setLangs((ls) => {
+      const prev = ls[activeLang].markdown;
+      const next = typeof v === "function" ? v(prev) : v;
+      return { ...ls, [activeLang]: { ...ls[activeLang], markdown: next } };
+    });
+  const setRows = (v: EditorBlock[] | ((rs: EditorBlock[]) => EditorBlock[])) =>
+    setLangs((ls) => {
+      const prev = ls[activeLang].rows;
+      const next = typeof v === "function" ? v(prev) : v;
+      return { ...ls, [activeLang]: { ...ls[activeLang], rows: next } };
+    });
+
+  // Whether a language has any authored content (drives the tab indicator and
+  // "publish now, translate later": empty languages are simply omitted).
+  const langHasContent = (loc: Locale) => {
+    const s = langs[loc];
+    if (s.title.trim()) return true;
+    return s.mode === "markdown"
+      ? s.markdown.trim() !== ""
+      : toBlocks(s.rows).length > 0;
+  };
 
   const update = (id: number, patch: Partial<EditorBlock>) =>
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -298,6 +411,26 @@ export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
     }
   };
 
+  // Blocks mode: one-click "insert image" — upload, then append a new img block
+  // (alt defaulted to the file name). The author can reorder it with ↑/↓.
+  const insertImageBlock = async (file: File) => {
+    const invalid = validateImage(file);
+    if (invalid) return setError(invalid);
+    setError("");
+    setInsertingImage(true);
+    try {
+      const url = await uploadImage(file);
+      setRows((rs) => [
+        ...rs,
+        { ...newBlock("img"), src: url, alt: baseName(file.name) },
+      ]);
+    } catch (err) {
+      uploadError(err);
+    } finally {
+      setInsertingImage(false);
+    }
+  };
+
   // Wrap the selection of the last-focused textarea in inline markers. State is
   // updated through the field's data-target key so React stays the source of
   // truth; the DOM element is only read for the selection range.
@@ -334,34 +467,64 @@ export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
     }
   };
 
+  // buildLang turns one language's editor state into a payload entry. An empty
+  // language yields null (skipped); a partially-filled one yields "incomplete"
+  // so submit can flag it. The cover image is shared, so coverAlt only rides
+  // along when a cover exists.
+  const buildLang = (
+    loc: Locale,
+  ): "empty" | "incomplete" | LocalizedInput => {
+    const s = langs[loc];
+    const hasTitle = s.title.trim() !== "";
+    const body = s.mode === "blocks" ? toBlocks(s.rows) : [];
+    const hasBody =
+      s.mode === "markdown" ? s.markdown.trim() !== "" : body.length > 0;
+    if (!hasTitle && !hasBody) return "empty";
+    if (!hasTitle || !hasBody) return "incomplete";
+    const meta = {
+      lang: loc,
+      title: s.title.trim(),
+      excerpt: s.excerpt.trim() || undefined,
+      coverAlt: cover.trim() ? s.coverAlt.trim() || undefined : undefined,
+    };
+    return s.mode === "markdown"
+      ? { ...meta, format: "markdown", content: s.markdown }
+      : { ...meta, format: "blocks", body };
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!title.trim()) return setError(t("editor.errTitle"));
     if (!category.trim()) return setError(t("editor.errCategory"));
+
+    const complete: LocalizedInput[] = [];
+    for (const loc of LOCALES) {
+      const built = buildLang(loc);
+      if (built === "empty") continue;
+      if (built === "incomplete") {
+        return setError(
+          t("editor.errIncompleteLang", { lang: LOCALE_LABELS[loc] }),
+        );
+      }
+      complete.push(built);
+    }
+    if (complete.length === 0) return setError(t("editor.errNoContent"));
 
     const tags = tagsRaw
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean)
       .slice(0, 8);
-    const base = {
-      title: title.trim(),
-      excerpt: excerpt.trim() || undefined,
+    // The first complete language (vi preferred, per LOCALES order) is primary;
+    // the rest are translations.
+    const [primary, ...rest] = complete;
+    const payload: NewArticleInput = {
       category: category.trim(),
       cover: cover.trim() || undefined,
-      coverAlt: cover.trim() ? coverAlt.trim() || undefined : undefined,
       tags,
+      ...primary,
+      translations: rest.length > 0 ? rest : undefined,
     };
-    let payload: NewArticleInput;
-    if (mode === "markdown") {
-      if (!markdown.trim()) return setError(t("editor.errBody"));
-      payload = { ...base, format: "markdown", content: markdown };
-    } else {
-      const body = toBlocks(rows);
-      if (body.length === 0) return setError(t("editor.errBody"));
-      payload = { ...base, format: "blocks", body };
-    }
 
     setBusy(true);
     try {
@@ -371,7 +534,8 @@ export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
           : await api.createArticle(payload);
       track(editing ? "edit_article" : "create_article", {
         slug: saved.slug,
-        format: mode,
+        format: primary.format,
+        langs: complete.length,
       });
       router.push(`/articles/${saved.slug}`);
       router.refresh();
@@ -397,6 +561,57 @@ export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
       </p>
 
       <form onSubmit={submit} className="rounded-2xl border border-border bg-surface p-7">
+        {/* --- language tabs (title/excerpt/body/coverAlt are per-language) --- */}
+        <div className="mb-5">
+          <span className={labelCls}>{t("editor.langSection")}</span>
+          <div
+            role="tablist"
+            aria-label={t("editor.langSection")}
+            className="flex gap-1.5"
+          >
+            {LOCALES.map((loc) => {
+              const filled = langHasContent(loc);
+              const selected = activeLang === loc;
+              return (
+                <button
+                  key={loc}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => {
+                    // The previously focused textarea belongs to the outgoing
+                    // language and is about to unmount; drop the ref so the
+                    // inline toolbar can't act on a detached node.
+                    activeField.current = null;
+                    setActiveLang(loc);
+                  }}
+                  className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13.5px] font-semibold transition-colors ${
+                    selected
+                      ? "border-accent-ink text-accent-ink"
+                      : "border-border2 text-c5b hover:border-hover"
+                  }`}
+                >
+                  {LOCALE_LABELS[loc]}
+                  <span
+                    title={
+                      filled
+                        ? t("editor.langHasContent")
+                        : t("editor.langNoContent")
+                    }
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      filled ? "bg-accent-ink" : "bg-border2"
+                    }`}
+                    aria-hidden
+                  />
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[12.5px] leading-[1.6] text-subtle">
+            {t("editor.langHint")}
+          </p>
+        </div>
+
         {/* --- metadata --- */}
         <label htmlFor="art-title" className={labelCls}>
           {t("editor.titleLabel")}
@@ -649,13 +864,38 @@ export function NewArticleForm({ article }: { article?: ArticleDetail } = {}) {
                     focusProps={focusProps}
                   />
                 ))}
-                <button
-                  type="button"
-                  onClick={() => setRows((rs) => [...rs, newBlock()])}
-                  className="cursor-pointer rounded-[9px] border border-dashed border-border2 px-4 py-2 text-[13.5px] font-semibold text-c5b transition-colors hover:border-hover hover:text-strong"
-                >
-                  {t("editor.addBlock")}
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRows((rs) => [...rs, newBlock()])}
+                    className="cursor-pointer rounded-[9px] border border-dashed border-border2 px-4 py-2 text-[13.5px] font-semibold text-c5b transition-colors hover:border-hover hover:text-strong"
+                  >
+                    {t("editor.addBlock")}
+                  </button>
+                  <label
+                    aria-busy={insertingImage}
+                    title={t("editor.insertImageBlock")}
+                    className={`inline-flex items-center gap-2 rounded-[9px] border border-dashed border-border2 px-4 py-2 text-[13.5px] font-semibold text-c5b transition-colors hover:border-hover hover:text-strong ${
+                      insertingImage ? "cursor-wait opacity-60" : "cursor-pointer"
+                    }`}
+                  >
+                    🖼️{" "}
+                    {insertingImage
+                      ? t("editor.uploading")
+                      : t("editor.insertImageBlock")}
+                    <input
+                      type="file"
+                      accept={IMAGE_ACCEPT}
+                      disabled={insertingImage}
+                      className="sr-only"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = "";
+                        if (file) void insertImageBlock(file);
+                      }}
+                    />
+                  </label>
+                </div>
                 <p className="mt-2 text-[12.5px] leading-[1.6] text-subtle">
                   {t("editor.inlineHint")}
                 </p>

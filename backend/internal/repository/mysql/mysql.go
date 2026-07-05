@@ -217,6 +217,29 @@ func marshalJSON(v any) ([]byte, error) {
 	return b, nil
 }
 
+// marshalTranslations serializes the per-language variants for the JSON
+// `translations` column, returning nil (SQL NULL) for a single-language article
+// so the column stays NULL rather than "{}".
+func marshalTranslations(t map[string]domain.Translation) (any, error) {
+	if len(t) == 0 {
+		return nil, nil
+	}
+	b, err := json.Marshal(t)
+	if err != nil {
+		return nil, fmt.Errorf("marshal translations: %w", err)
+	}
+	return b, nil
+}
+
+// langOr defaults an empty language to "vi" (legacy/seed rows predate the lang
+// column) so the persisted value always matches a known locale.
+func langOr(lang string) string {
+	if lang == "" {
+		return "vi"
+	}
+	return lang
+}
+
 func nullStr(s string) any {
 	if s == "" {
 		return nil
