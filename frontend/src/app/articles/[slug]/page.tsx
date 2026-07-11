@@ -73,7 +73,10 @@ export default async function ArticlePage({ params }: Params) {
   ];
   await Promise.all(
     allBodies.flat().map(async (block) => {
-      if (block.type === "code" && block.code) {
+      // Mermaid fences render client-side as diagrams (see Mermaid.tsx), so they
+      // skip Shiki — highlighting an unknown "mermaid" grammar would only emit
+      // plaintext HTML that the renderer never uses.
+      if (block.type === "code" && block.code && block.lang !== "mermaid") {
         block.html = await highlightCode(block.code, block.lang);
       }
     }),

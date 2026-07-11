@@ -3,6 +3,7 @@
 import type { Block } from "@/lib/types";
 import { CodeBlock } from "./blocks/CodeBlock";
 import { Diagram } from "./blocks/Diagram";
+import { Mermaid } from "./blocks/Mermaid";
 import { renderInline } from "./inline";
 
 // BlockView renders one article body block. Shared by the article page and the
@@ -22,6 +23,11 @@ export function BlockView({ block, slug }: { block: Block; slug: string }) {
         </blockquote>
       );
     case "code":
+      // A ```mermaid fence is stored as a code block; render it as a diagram
+      // rather than syntax-highlighted source.
+      if (block.lang === "mermaid") {
+        return <Mermaid code={block.code ?? ""} />;
+      }
       return (
         <CodeBlock
           lang={block.lang}
