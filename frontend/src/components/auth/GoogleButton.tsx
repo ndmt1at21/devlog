@@ -36,6 +36,9 @@ export function GoogleButton({
   event: "login" | "sign_up";
 }) {
   return (
+    // Must stay a plain <a> (top-level navigation): <Link> prefetch would
+    // start the OAuth redirect flow (and rotate the state cookie) in the
+    // background.
     <a
       href="/api/v1/auth/google/login"
       onClick={() => track(event, { method: "google" })}

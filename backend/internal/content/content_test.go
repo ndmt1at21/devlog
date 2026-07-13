@@ -123,3 +123,52 @@ func TestReadTimeAndExcerpt(t *testing.T) {
 		t.Errorf("long excerpt should be truncated with ellipsis, got %q", got)
 	}
 }
+
+func TestBlocksFromMarkdownImage(t *testing.T) {
+	src := "Đoạn mở đầu.\n" +
+		"\n" +
+		"![Sơ đồ kiến trúc](https://img.example.com/img/abc.png)\n" +
+		"\n" +
+		"Ảnh nội dòng ![x](https://img.example.com/i.png) vẫn là văn bản.\n"
+	got := BlocksFromMarkdown(src)
+	if len(got) != 3 {
+		t.Fatalf("blocks = %d, want 3: %+v", len(got), got)
+	}
+	img := got[1]
+	if img.Type != "img" || img.Src != "https://img.example.com/img/abc.png" || img.Alt != "Sơ đồ kiến trúc" {
+		t.Errorf("img block = %+v", img)
+	}
+	if got[2].Type != "p" || !strings.Contains(got[2].Text, "![x](") {
+		t.Errorf("inline image should stay literal text, got %+v", got[2])
+	}
+}
+
+func TestNormalizeBlocksImage(t *testing.T) {
+	got, err := NormalizeBlocks([]domain.Block{
+		{Type: "img", Src: "  https://img.example.com/img/a.png  ", Alt: " Ảnh minh hoạ ", Caption: "Chú thích"},
+		{Type: "img", Src: ""}, // dropped, like other empty blocks
+		{Type: "img", Src: "http://localhost:9000/devlog-images/img/b.png"}, // dev MinIO
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("blocks = %d, want 2: %+v", len(got), got)
+	}
+	if got[0].Src != "https://img.example.com/img/a.png" || got[0].Alt != "Ảnh minh hoạ" || got[0].Caption != "Chú thích" {
+		t.Errorf("img normalize = %+v", got[0])
+	}
+
+	bad := []domain.Block{
+		{Type: "img", Src: "http://img.example.com/a.png"},                   // http on a real host
+		{Type: "img", Src: "javascript:alert(1)"},                            // no host
+		{Type: "img", Src: "/img/a.png"},                                     // relative
+		{Type: "img", Src: "https://x.vn/" + strings.Repeat("a", MaxURLLen)}, // too long
+		{Type: "img", Src: "https://x.vn/a.png", Alt: strings.Repeat("a", MaxCaption+1)},
+	}
+	for i, b := range bad {
+		if _, err := NormalizeBlocks([]domain.Block{b}); err == nil {
+			t.Errorf("bad img %d should be rejected: %+v", i, b)
+		}
+	}
+}

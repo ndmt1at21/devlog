@@ -11,17 +11,23 @@ import (
 type Config struct {
 	Port string
 
+	// Observability. LogLevel is debug|info|warn|error; LogFormat is "json"
+	// (one object per line, for log aggregation) or "text" (human-readable dev).
+	LogLevel  string
+	LogFormat string
+
 	// Storage: "memory" (zero-infra dev default) or "mysql".
 	DBDriver string
 	DBDSN    string
 
-	// IAM (OAuth2/OIDC) integration. Empty IAMIssuer disables real auth.
-	IAMIssuer       string // tenant protocol base, e.g. http://localhost:8080/t/devnote
-	IAMTenantID     string
-	IAMClientID     string
-	IAMClientSecret string
+	// Google OAuth client for "Đăng nhập với Google" (embedded federated
+	// login). Empty GoogleClientID disables the flow; email/password auth
+	// works regardless.
+	GoogleClientID     string
+	GoogleClientSecret string
 
-	// Session cookie signing secret.
+	// Session cookie signing secret. Also keys the embedded auth provider's
+	// access tokens (domain-separated).
 	SessionSecret string
 	// CookieSecure controls the Secure flag (disable for plain-HTTP localhost).
 	CookieSecure bool
@@ -41,20 +47,32 @@ type Config struct {
 	MomoSecretKey      string
 	MomoCreateEndpoint string
 	MomoQueryEndpoint  string
+
+	// Object storage for article images: any S3-compatible store (Cloudflare R2
+	// in production, MinIO for local dev). Incomplete settings disable uploads.
+	S3Endpoint        string // https://<account_id>.r2.cloudflarestorage.com
+	S3Bucket          string
+	S3Region          string // "auto" on R2
+	S3AccessKeyID     string
+	S3SecretAccessKey string
+	// ImageBaseURL is the public origin the bucket is served from (R2 custom
+	// domain behind Cloudflare's CDN, e.g. https://img.example.com). It prefixes
+	// every stored image URL, and article bodies may only embed images under it.
+	ImageBaseURL string
 }
 
 // Load reads configuration from the environment, applying sensible dev defaults.
 func Load() (Config, error) {
 	c := Config{
-		Port:            env("PORT", "8080"),
-		DBDriver:        strings.ToLower(env("DB_DRIVER", "memory")),
-		DBDSN:           os.Getenv("DB_DSN"),
-		IAMIssuer:       os.Getenv("IAM_ISSUER_URL"),
-		IAMTenantID:     os.Getenv("IAM_TENANT_ID"),
-		IAMClientID:     os.Getenv("IAM_CLIENT_ID"),
-		IAMClientSecret: os.Getenv("IAM_CLIENT_SECRET"),
-		SessionSecret:   env("SESSION_SECRET", "dev-insecure-session-secret-change-me"),
-		CookieSecure:    env("COOKIE_SECURE", "false") == "true",
+		Port:               env("PORT", "8080"),
+		LogLevel:           strings.ToLower(env("LOG_LEVEL", "info")),
+		LogFormat:          strings.ToLower(env("LOG_FORMAT", "text")),
+		DBDriver:           strings.ToLower(env("DB_DRIVER", "memory")),
+		DBDSN:              os.Getenv("DB_DSN"),
+		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		SessionSecret:      env("SESSION_SECRET", "dev-insecure-session-secret-change-me"),
+		CookieSecure:       env("COOKIE_SECURE", "false") == "true",
 
 		AppBaseURL: env("APP_BASE_URL", "http://localhost:3000"),
 
@@ -66,6 +84,15 @@ func Load() (Config, error) {
 		MomoSecretKey:      os.Getenv("MOMO_SECRET_KEY"),
 		MomoCreateEndpoint: env("MOMO_CREATE_ENDPOINT", "https://test-payment.momo.vn/v3/gateway/api/create"),
 		MomoQueryEndpoint:  env("MOMO_QUERY_ENDPOINT", "https://test-payment.momo.vn/v3/gateway/api/query"),
+
+		S3Endpoint:        strings.TrimRight(os.Getenv("S3_ENDPOINT"), "/"),
+		S3Bucket:          strings.TrimSpace(os.Getenv("S3_BUCKET")),
+		S3Region:          strings.TrimSpace(env("S3_REGION", "auto")),
+		// Credentials are trimmed: a trailing newline pasted into an env/secret
+		// silently corrupts the SigV4 key and yields 403/SignatureDoesNotMatch.
+		S3AccessKeyID:     strings.TrimSpace(os.Getenv("S3_ACCESS_KEY_ID")),
+		S3SecretAccessKey: strings.TrimSpace(os.Getenv("S3_SECRET_ACCESS_KEY")),
+		ImageBaseURL:      strings.TrimRight(os.Getenv("IMAGE_BASE_URL"), "/"),
 	}
 
 	switch c.DBDriver {
@@ -80,11 +107,6 @@ func Load() (Config, error) {
 	return c, nil
 }
 
-// AuthEnabled reports whether IAM integration is configured.
-func (c Config) AuthEnabled() bool {
-	return c.IAMIssuer != "" && c.IAMClientID != ""
-}
-
 // StripeEnabled reports whether real Stripe card payments are configured. When
 // false the card method falls back to the demo flow.
 func (c Config) StripeEnabled() bool { return c.StripeSecretKey != "" }
@@ -93,6 +115,13 @@ func (c Config) StripeEnabled() bool { return c.StripeSecretKey != "" }
 // MoMo method falls back to the demo flow.
 func (c Config) MomoEnabled() bool {
 	return c.MomoPartnerCode != "" && c.MomoAccessKey != "" && c.MomoSecretKey != ""
+}
+
+// UploadsEnabled reports whether image uploads are fully configured. When
+// false, POST /uploads answers 503 and the editor surfaces the error.
+func (c Config) UploadsEnabled() bool {
+	return c.S3Endpoint != "" && c.S3Bucket != "" && c.S3AccessKeyID != "" &&
+		c.S3SecretAccessKey != "" && c.ImageBaseURL != ""
 }
 
 func env(key, def string) string {

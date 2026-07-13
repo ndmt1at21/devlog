@@ -7,6 +7,7 @@ package content
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -22,6 +23,7 @@ const (
 	MaxCaption   = 300
 	MaxListItems = 50
 	MaxItemLen   = 500
+	MaxURLLen    = 2048
 )
 
 // ErrInvalid wraps a human-readable validation failure for the block body.
@@ -39,13 +41,17 @@ var (
 	headingRe = regexp.MustCompile(`^(#{1,6})\s+(.*)$`)
 	orderedRe = regexp.MustCompile(`^\d{1,4}[.)]\s+(.*)$`)
 	hruleRe   = regexp.MustCompile(`^(-{3,}|\*{3,}|_{3,})$`)
+	// imageRe matches a line that is exactly one ![alt](url) image. Images mixed
+	// into paragraph text stay literal — only standalone lines become blocks.
+	imageRe = regexp.MustCompile(`^!\[([^\]]*)\]\(([^()\s]+)\)$`)
 )
 
 // BlocksFromMarkdown converts README-style markdown into body blocks:
 // headings → "h", fenced code (with optional language) → "code", "> " quotes →
-// "quote", -/*/+ and "1." lists → "list", horizontal rules are dropped, and
-// consecutive text lines merge into "p" paragraphs. Inline spans are preserved
-// verbatim in the text. The output still goes through NormalizeBlocks.
+// "quote", -/*/+ and "1." lists → "list", standalone ![alt](url) lines →
+// "img", horizontal rules are dropped, and consecutive text lines merge into
+// "p" paragraphs. Inline spans are preserved verbatim in the text. The output
+// still goes through NormalizeBlocks.
 func BlocksFromMarkdown(src string) []domain.Block {
 	lines := strings.Split(strings.ReplaceAll(src, "\r\n", "\n"), "\n")
 	var blocks []domain.Block
@@ -83,6 +89,12 @@ func BlocksFromMarkdown(src string) []domain.Block {
 			flush()
 			m := headingRe.FindStringSubmatch(trimmed)
 			blocks = append(blocks, domain.Block{Type: "h", Text: strings.TrimSpace(m[2])})
+			i++
+
+		case imageRe.MatchString(trimmed):
+			flush()
+			m := imageRe.FindStringSubmatch(trimmed)
+			blocks = append(blocks, domain.Block{Type: "img", Alt: strings.TrimSpace(m[1]), Src: m[2]})
 			i++
 
 		case strings.HasPrefix(trimmed, ">"):
@@ -201,6 +213,19 @@ func NormalizeBlocks(in []domain.Block) ([]domain.Block, error) {
 				continue
 			}
 			out = append(out, domain.Block{Type: "list", Items: items, Ordered: b.Ordered})
+		case "img":
+			b.Src = strings.TrimSpace(b.Src)
+			b.Alt = strings.TrimSpace(b.Alt)
+			if b.Src == "" {
+				continue
+			}
+			if err := ValidateImageURL(b.Src); err != nil {
+				return nil, invalidf("khối %d: %s", i+1, err)
+			}
+			if len(b.Alt) > MaxCaption || len(b.Caption) > MaxCaption {
+				return nil, invalidf("khối %d: mô tả ảnh quá dài (tối đa %d ký tự)", i+1, MaxCaption)
+			}
+			out = append(out, domain.Block{Type: "img", Src: b.Src, Alt: b.Alt, Caption: b.Caption})
 		default:
 			return nil, invalidf("khối %d: loại %q không được hỗ trợ", i+1, b.Type)
 		}
@@ -209,6 +234,25 @@ func NormalizeBlocks(in []domain.Block) ([]domain.Block, error) {
 		return nil, invalidf("nội dung bài viết đang trống")
 	}
 	return out, nil
+}
+
+// ValidateImageURL enforces the shape of an image URL — an img block's Src or an
+// article cover: an absolute https URL (plain http only for loopback hosts, so
+// MinIO works in dev) within the length cap. Which *origin* is allowed is
+// deployment policy, checked in the handler against the configured image base URL.
+func ValidateImageURL(src string) error {
+	if len(src) > MaxURLLen {
+		return invalidf("đường dẫn ảnh quá dài (tối đa %d ký tự)", MaxURLLen)
+	}
+	u, err := url.Parse(src)
+	if err != nil || u.Host == "" {
+		return invalidf("đường dẫn ảnh không hợp lệ")
+	}
+	local := u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1"
+	if u.Scheme != "https" && !(u.Scheme == "http" && local) {
+		return invalidf("đường dẫn ảnh phải dùng https")
+	}
+	return nil
 }
 
 func normalizeItems(in []string, blockIdx int) ([]string, error) {

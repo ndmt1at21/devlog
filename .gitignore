@@ -11,6 +11,9 @@ dist/
 .env
 .env.local
 .env*.local
+# Production runtime secrets (lives on the VPS; only the .example is tracked)
+backend.env
+deployments/backend.env
 
 # Logs
 *.log

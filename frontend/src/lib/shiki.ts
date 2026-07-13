@@ -1,12 +1,19 @@
 // Server-side syntax highlighting with Shiki's FINE-GRAINED core. The full `shiki`
 // bundle inlines every grammar (~200 languages) into one file — on Cloudflare
 // Workers that made handler.mjs ~15 MB. Here we build a highlighter from just the
-// languages we render plus the standalone Oniguruma WASM engine, so only those
-// grammars ship. Runs only on the server (zero highlighting JS to the browser);
-// a single highlighter is cached across requests.
+// languages we render, so only those grammars ship. Runs only on the server
+// (zero highlighting JS to the browser); a single highlighter is cached across
+// requests.
+//
+// Engine: the pure-JS RegExp engine, NOT the Oniguruma WASM one. The Workers
+// runtime (workerd) forbids compiling WebAssembly from a byte buffer at request
+// time — that's a hard "code generation disallowed by embedder" trap. Shiki's
+// `wasm-inlined` engine does exactly that (`WebAssembly.instantiate(bytes)` per
+// request), so it throws on Cloudflare. The JS engine uses native RegExp with no
+// WASM at all and is Shiki's recommended engine for Workers.
 import "server-only";
 import { createHighlighterCore, type HighlighterCore } from "shiki/core";
-import { createOnigurumaEngine } from "@shikijs/engine-oniguruma";
+import { createJavaScriptRegexEngine } from "@shikijs/engine-javascript";
 
 const THEME = "one-dark-pro";
 
@@ -37,11 +44,11 @@ function getHighlighter(): Promise<HighlighterCore> {
         import("@shikijs/langs/css"),
         import("@shikijs/langs/html"),
       ],
-      // Standalone Oniguruma engine with the WASM inlined (base64), so there's no
-      // separate .wasm asset to fetch at runtime — required on Cloudflare Workers.
-      engine: createOnigurumaEngine(
-        import("@shikijs/engine-oniguruma/wasm-inlined"),
-      ),
+      // Pure-JS RegExp engine (no WASM). `forgiving` degrades gracefully: a
+      // grammar pattern the JS engine can't translate is skipped instead of
+      // throwing mid-request, so a rare unsupported construct can't 500 an
+      // article page.
+      engine: createJavaScriptRegexEngine({ forgiving: true }),
     });
   }
   return highlighterPromise;

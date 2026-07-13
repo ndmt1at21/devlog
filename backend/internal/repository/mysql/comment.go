@@ -9,6 +9,7 @@ import (
 	"github.com/ndmt1at21/devlog/backend/internal/platform/id"
 )
 
+// comment
 type commentRepo struct{ db *sql.DB }
 
 func (r *commentRepo) ListByArticle(ctx context.Context, slug string) ([]domain.Comment, error) {

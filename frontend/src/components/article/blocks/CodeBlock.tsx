@@ -50,7 +50,7 @@ export function CodeBlock({
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (
-        <pre className="m-0 overflow-x-auto whitespace-pre px-[18px] py-4 font-mono text-[13.5px] leading-[1.7] text-[#dfe3e8]">
+        <pre className="m-0 overflow-x-auto whitespace-pre px-[18px] py-4 font-mono text-[13.5px] leading-[1.7] text-[#dfe3e8] [tab-size:4]">
           {code}
         </pre>
       )}

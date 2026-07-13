@@ -10,6 +10,13 @@
     "binding": "ASSETS",
     "directory": ".open-next/assets"
   },
+  // Cloudflare Images binding that powers next/image optimization on the Workers
+  // runtime: OpenNext routes /_next/image through env.IMAGES. Without it the
+  // adapter throws "env.IMAGES binding is not defined" whenever an <Image>
+  // renders. Requires Image Transformations to be enabled for the zone.
+  "images": {
+    "binding": "IMAGES"
+  },
   "observability": {
     "enabled": true
   },
@@ -19,6 +26,6 @@
     // SSR API client (src/lib/server-api.ts). NOTE: the /api/* rewrite in
     // next.config.ts bakes BACKEND_INTERNAL_URL in at BUILD time, so also set
     // the same value in the build environment (see .env.example).
-    "BACKEND_INTERNAL_URL": "https://REPLACE-WITH-YOUR-BACKEND.example.com"
+    "BACKEND_INTERNAL_URL": "https://api.jamti.dev"
   }
 }

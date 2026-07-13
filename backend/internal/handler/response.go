@@ -3,10 +3,10 @@ package handler
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 
 	"github.com/ndmt1at21/devlog/backend/internal/apierr"
+	"github.com/ndmt1at21/devlog/backend/internal/platform/logger"
 )
 
 // envelope is the uniform response shape for every JSON API endpoint:
@@ -29,10 +29,28 @@ func writeJSON(w http.ResponseWriter, r *http.Request, status int, data any) {
 
 // writeError writes an error envelope. Any *apierr.Error is honored for its
 // Code/Status/Message; anything else becomes a generic 500 (ErrInternal).
+//
+// Server-side failures are logged here so they aren't lost: an unexpected
+// (non-apierr) error is logged with its real cause — which the client never
+// sees — and any 5xx apierr is recorded with its code. Both carry the request's
+// trace id via the context logger, so a client-reported traceId points straight
+// at the server log line.
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	var e *apierr.Error
 	if !errors.As(err, &e) {
+		logger.From(r.Context()).Error("unhandled error",
+			"err", err.Error(),
+			"method", r.Method,
+			"path", r.URL.Path,
+		)
 		e = apierr.ErrInternal
+	} else if e.Status >= 500 {
+		logger.From(r.Context()).Error("request failed",
+			"code", e.Code,
+			"message", e.Message,
+			"method", r.Method,
+			"path", r.URL.Path,
+		)
 	}
 	writeEnvelope(w, r, e.Status, e.Code, e.Message, nil)
 }
@@ -50,7 +68,7 @@ func writeEnvelope(w http.ResponseWriter, r *http.Request, status, code int, mes
 		TraceID: traceID,
 		Data:    data,
 	}); err != nil {
-		log.Printf("encode response: %v", err)
+		logger.From(r.Context()).Error("encode response", "err", err.Error())
 	}
 }
 

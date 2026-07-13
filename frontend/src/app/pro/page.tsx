@@ -4,8 +4,8 @@ import { ProContent } from "@/components/pro/ProContent";
 import { proEnabled } from "@/lib/features";
 
 export const metadata: Metadata = {
-  title: "devnote Pro",
-  description: "Đọc không giới hạn, không quảng cáo. Ủng hộ devnote với gói Pro.",
+  title: "jamti Pro",
+  description: "Đọc không giới hạn, không quảng cáo. Ủng hộ jamti với gói Pro.",
 };
 
 export default function ProPage() {

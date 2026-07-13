@@ -65,10 +65,14 @@ func TestListAndFeatured(t *testing.T) {
 		t.Fatalf("articles len = %d, want 10", len(list))
 	}
 
-	var featured map[string]any
+	// Featured returns every flagged article ordered by ord.
+	var featured []map[string]any
 	getEnv(t, srv.URL+v1+"/articles/featured", &featured)
-	if featured["slug"] != "ai-agents" {
-		t.Fatalf("featured slug = %v, want ai-agents", featured["slug"])
+	if len(featured) != 2 {
+		t.Fatalf("featured len = %d, want 2", len(featured))
+	}
+	if featured[0]["slug"] != "ai-agents" || featured[1]["slug"] != "react-perf" {
+		t.Fatalf("featured slugs = %v, want [ai-agents react-perf]", featured)
 	}
 }
 
@@ -142,5 +146,43 @@ func TestCommentValidationAndCreate(t *testing.T) {
 	json.Unmarshal(env.Data, &c)
 	if c["name"] != "Tester" || c["initial"] != "T" {
 		t.Fatalf("unexpected comment dto: %v", c)
+	}
+}
+
+func TestReactions(t *testing.T) {
+	srv := newServer(t)
+	defer srv.Close()
+
+	// Anonymous status: zero likes, nothing liked/bookmarked.
+	var st struct {
+		Likes      int  `json:"likes"`
+		Liked      bool `json:"liked"`
+		Bookmarked bool `json:"bookmarked"`
+	}
+	status, env := getEnv(t, srv.URL+v1+"/articles/ai-agents/reactions", &st)
+	if status != 200 || env.Code != 0 {
+		t.Fatalf("reactions status=%d code=%d", status, env.Code)
+	}
+	if st.Likes != 0 || st.Liked || st.Bookmarked {
+		t.Fatalf("anonymous reactions = %+v, want zero state", st)
+	}
+
+	// Toggling requires login → 401 with the unauthorized code (1002).
+	req, _ := http.NewRequest(http.MethodPut, srv.URL+v1+"/articles/ai-agents/reactions/like", nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var errEnv envelope
+	json.NewDecoder(res.Body).Decode(&errEnv)
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized || errEnv.Code != 1002 {
+		t.Fatalf("anonymous like status=%d code=%d, want 401/1002", res.StatusCode, errEnv.Code)
+	}
+
+	// Bookmark listing also requires login.
+	status, env = getEnv(t, srv.URL+v1+"/me/bookmarks", nil)
+	if status != http.StatusUnauthorized || env.Code != 1002 {
+		t.Fatalf("anonymous bookmarks status=%d code=%d, want 401/1002", status, env.Code)
 	}
 }

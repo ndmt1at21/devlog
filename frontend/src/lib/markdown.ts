@@ -5,6 +5,8 @@ import type { Block } from "./types";
 const HEADING_RE = /^(#{1,6})\s+(.*)$/;
 const ORDERED_RE = /^\d{1,4}[.)]\s+(.*)$/;
 const HRULE_RE = /^(-{3,}|\*{3,}|_{3,})$/;
+// A line that is exactly one ![alt](url) image; inline images stay literal.
+const IMAGE_RE = /^!\[([^\]]*)\]\(([^()\s]+)\)$/;
 
 function unorderedItem(line: string): string {
   for (const marker of ["- ", "* ", "+ "]) {
@@ -50,6 +52,11 @@ export function blocksFromMarkdown(src: string): Block[] {
     } else if (HEADING_RE.test(trimmed)) {
       flush();
       blocks.push({ type: "h", text: HEADING_RE.exec(trimmed)![2].trim() });
+      i++;
+    } else if (IMAGE_RE.test(trimmed)) {
+      flush();
+      const m = IMAGE_RE.exec(trimmed)!;
+      blocks.push({ type: "img", alt: m[1].trim(), src: m[2] });
       i++;
     } else if (trimmed.startsWith(">")) {
       flush();

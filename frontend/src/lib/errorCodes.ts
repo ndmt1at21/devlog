@@ -29,6 +29,13 @@ const vi: Record<number, string> = {
   3004: "Không tải được danh mục.",
   3005: "Bạn không có quyền tạo bài viết.",
   3006: "Không tạo được bài viết.",
+  3007: "Tải ảnh chưa được cấu hình.",
+  3008: "Chỉ hỗ trợ ảnh JPEG, PNG, WebP, GIF hoặc AVIF.",
+  3009: "Ảnh tối đa 5 MB.",
+  3010: "Không tạo được liên kết tải ảnh.",
+  3011: "Ảnh trong bài phải được tải lên từ trình soạn thảo.",
+  3012: "Không cập nhật được bài viết.",
+  3013: "Bạn không có quyền sửa bài viết này.",
   4000: "Không tải được bình luận.",
   4001: "Không gửi được bình luận.",
   5000: "Gói không hợp lệ.",
@@ -41,6 +48,10 @@ const vi: Record<number, string> = {
   6004: "Không tạo được đơn hàng.",
   6005: "Không tìm thấy đơn hàng.",
   6006: "Không tải được đơn hàng.",
+  7000: "Không tải được lượt thích.",
+  7001: "Không cập nhật được tương tác.",
+  7002: "Loại tương tác không hợp lệ.",
+  7003: "Không tải được bài viết đã lưu.",
 };
 
 const en: Record<number, string> = {
@@ -67,6 +78,13 @@ const en: Record<number, string> = {
   3004: "Couldn’t load categories.",
   3005: "You don’t have permission to publish articles.",
   3006: "Couldn’t create the article.",
+  3007: "Image uploads aren’t configured.",
+  3008: "Only JPEG, PNG, WebP, GIF or AVIF images are supported.",
+  3009: "Images can be at most 5 MB.",
+  3010: "Couldn’t create the upload link.",
+  3011: "Article images must be uploaded through the editor.",
+  3012: "Couldn’t update the article.",
+  3013: "You don’t have permission to edit this article.",
   4000: "Couldn’t load comments.",
   4001: "Couldn’t post the comment.",
   5000: "Invalid plan.",
@@ -79,6 +97,10 @@ const en: Record<number, string> = {
   6004: "Couldn’t create the order.",
   6005: "Order not found.",
   6006: "Couldn’t load the order.",
+  7000: "Couldn’t load likes.",
+  7001: "Couldn’t update the reaction.",
+  7002: "Invalid reaction kind.",
+  7003: "Couldn’t load saved articles.",
 };
 
 const MESSAGES: Record<Locale, Record<number, string>> = { vi, en };

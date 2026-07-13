@@ -29,8 +29,9 @@ type Store struct {
 	db *sql.DB
 }
 
-// New opens a MySQL connection, applies migrations, seeds initial content when
-// the articles table is empty, and returns the store.
+// New opens a MySQL connection, applies migrations, and returns the store. It
+// never seeds: production databases stay clean, and demo content is loaded
+// out-of-band by the separate `cmd/seed` command (which calls Store.Seed).
 func New(ctx context.Context, dsn string) (*Store, error) {
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -48,17 +49,17 @@ func New(ctx context.Context, dsn string) (*Store, error) {
 	if err := s.migrate(ctx); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
-	if err := s.seedIfEmpty(ctx); err != nil {
-		return nil, fmt.Errorf("seed: %w", err)
-	}
 	return s, nil
 }
 
 func (s *Store) Articles() domain.ArticleRepository           { return &articleRepo{s.db} }
 func (s *Store) Series() domain.SeriesRepository              { return &seriesRepo{s.db} }
 func (s *Store) Comments() domain.CommentRepository           { return &commentRepo{s.db} }
+func (s *Store) Reactions() domain.ReactionRepository         { return &reactionRepo{s.db} }
 func (s *Store) Subscriptions() domain.SubscriptionRepository { return &subRepo{s.db} }
 func (s *Store) CoffeeOrders() domain.CoffeeOrderRepository   { return &coffeeRepo{s.db} }
+func (s *Store) Users() domain.UserRepository                 { return &userRepo{s.db} }
+func (s *Store) RefreshTokens() domain.RefreshTokenRepository { return &refreshTokenRepo{s.db} }
 func (s *Store) Ping(ctx context.Context) error               { return s.db.PingContext(ctx) }
 func (s *Store) Close() error                                 { return s.db.Close() }
 
@@ -98,10 +99,7 @@ func (s *Store) migrate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		for _, stmt := range strings.Split(string(content), ";") {
-			if strings.TrimSpace(stmt) == "" {
-				continue
-			}
+		for _, stmt := range splitStatements(string(content)) {
 			if _, err := s.db.ExecContext(ctx, stmt); err != nil {
 				return fmt.Errorf("apply %s: %w", name, err)
 			}
@@ -114,17 +112,6 @@ func (s *Store) migrate(ctx context.Context) error {
 }
 
 // ---- seeding ----
-
-func (s *Store) seedIfEmpty(ctx context.Context) error {
-	var n int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM articles`).Scan(&n); err != nil {
-		return err
-	}
-	if n > 0 {
-		return nil
-	}
-	return s.Seed(ctx)
-}
 
 // Seed upserts the design's series and articles and inserts seed comments when
 // none exist. Safe to run repeatedly.
@@ -179,6 +166,29 @@ func (s *Store) Seed(ctx context.Context) error {
 	return nil
 }
 
+// splitStatements breaks a migration file into executable statements: it drops
+// whole-line "--" comments first so semicolons inside comment prose don't cut a
+// statement short (see 0003_reactions.up.sql), then splits on ";" and discards
+// empty fragments. Constraints for migration authors: don't put ";" in inline
+// trailing comments or string literals (none of our DDL needs either).
+func splitStatements(sql string) []string {
+	var b strings.Builder
+	for line := range strings.Lines(sql) {
+		if strings.HasPrefix(strings.TrimSpace(line), "--") {
+			continue
+		}
+		b.WriteString(line)
+	}
+	var out []string
+	for _, stmt := range strings.Split(b.String(), ";") {
+		if strings.TrimSpace(stmt) == "" {
+			continue
+		}
+		out = append(out, stmt)
+	}
+	return out
+}
+
 // ---- shared helpers ----
 
 func timeNow() time.Time { return time.Now().UTC() }
@@ -205,6 +215,29 @@ func marshalJSON(v any) ([]byte, error) {
 		return nil, fmt.Errorf("marshal json: %w", err)
 	}
 	return b, nil
+}
+
+// marshalTranslations serializes the per-language variants for the JSON
+// `translations` column, returning nil (SQL NULL) for a single-language article
+// so the column stays NULL rather than "{}".
+func marshalTranslations(t map[string]domain.Translation) (any, error) {
+	if len(t) == 0 {
+		return nil, nil
+	}
+	b, err := json.Marshal(t)
+	if err != nil {
+		return nil, fmt.Errorf("marshal translations: %w", err)
+	}
+	return b, nil
+}
+
+// langOr defaults an empty language to "vi" (legacy/seed rows predate the lang
+// column) so the persisted value always matches a known locale.
+func langOr(lang string) string {
+	if lang == "" {
+		return "vi"
+	}
+	return lang
 }
 
 func nullStr(s string) any {

@@ -1,84 +1,99 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { ArticleSummary } from "@/lib/types";
-import { useSearch } from "@/lib/search";
 import { useT } from "@/lib/i18n/provider";
-import { track } from "@/lib/analytics";
-import { FeaturedCard } from "./FeaturedCard";
+import { FeaturedCarousel } from "./FeaturedCarousel";
 import { ArticleCard } from "./ArticleCard";
 import { CategoryFilter } from "./CategoryFilter";
 
 const ALL = "Tất cả";
 
-function matches(a: ArticleSummary, q: string): boolean {
-  const hay = `${a.title} ${a.excerpt} ${a.category} ${a.tags.join(" ")}`.toLowerCase();
-  return hay.includes(q);
-}
-
+/**
+ * Homepage below the header. Both the text search (?q=…) and the category
+ * filter (?category=…) live in the URL, so a reload — or back/forward —
+ * restores the current view. Search is applied server-side (`articles` arrive
+ * pre-filtered); the category refines that list client-side.
+ */
 export function HomeContent({
   featured,
   articles,
   categories,
+  query = "",
+  category = ALL,
 }: {
-  featured: ArticleSummary | null;
+  featured: ArticleSummary[];
   articles: ArticleSummary[];
   categories: string[];
+  query?: string;
+  category?: string;
 }) {
-  const { query } = useSearch();
   const t = useT();
-  const [category, setCategory] = useState(ALL);
+  const router = useRouter();
 
-  const q = query.trim().toLowerCase();
-  const searching = q !== "";
-  const showFeatured = !searching && category === ALL && !!featured;
+  const searching = query !== "";
+  // Featured stays pinned on top across category switches; only an active
+  // search takes over the page.
+  const showFeatured = !searching && featured.length > 0;
 
   const grid = useMemo(() => {
     let list = articles;
     if (category !== ALL) list = list.filter((a) => a.category === category);
-    if (q) list = list.filter((a) => matches(a, q));
-    if (showFeatured && featured)
-      list = list.filter((a) => a.slug !== featured.slug);
+    if (showFeatured) {
+      const pinned = new Set(featured.map((f) => f.slug));
+      list = list.filter((a) => !pinned.has(a.slug));
+    }
     return list;
-  }, [articles, category, q, showFeatured, featured]);
+  }, [articles, category, showFeatured, featured]);
 
-  // Debounced `search` analytics event.
-  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!searching) return;
-    if (debounce.current) clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => {
-      track("search", { search_term: q, results_count: grid.length });
-    }, 500);
-    return () => {
-      if (debounce.current) clearTimeout(debounce.current);
-    };
-  }, [q, searching, grid.length]);
+  // Write the selection to the URL (preserving the search term) instead of
+  // holding it in local state, so it survives a reload. The article data does
+  // not depend on ?category=, so this is a cheap soft navigation; keep the
+  // scroll position so switching filters doesn't jump to the top.
+  const selectCategory = (cat: string) => {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (cat !== ALL) params.set("category", cat);
+    const qs = params.toString();
+    router.push(qs ? `/?${qs}` : "/", { scroll: false });
+  };
+
+  // Clearing the search drops ?q= but keeps the active category filter.
+  const clearSearchHref =
+    category !== ALL ? `/?category=${encodeURIComponent(category)}` : "/";
 
   return (
     <div>
-      {showFeatured && featured && (
+      {showFeatured && (
         <section className="mx-auto max-w-[1120px] px-6 pt-11">
           <div className="mb-5 text-[13px] font-semibold uppercase tracking-[.08em] text-accent-ink">
             {t("home.featured")}
           </div>
-          <FeaturedCard article={featured} />
+          <FeaturedCarousel articles={featured} />
         </section>
       )}
 
       <CategoryFilter
         categories={categories}
         active={category}
-        onSelect={setCategory}
+        onSelect={selectCategory}
       />
 
       {searching && (
-        <div className="mx-auto mt-10 max-w-[1120px] px-6">
+        <div className="mx-auto mt-10 flex max-w-[1120px] flex-wrap items-center gap-x-4 gap-y-2 px-6">
           <div className="text-[15px] font-medium text-c5b">
             {grid.length > 0
-              ? t("home.resultsFor", { count: grid.length, term: query.trim() })
-              : t("home.noResultsFor", { term: query.trim() })}
+              ? t("home.resultsFor", { count: grid.length, term: query })
+              : t("home.noResultsFor", { term: query })}
           </div>
+          <Link
+            href={clearSearchHref}
+            className="text-[13.5px] font-semibold text-accent-ink no-underline hover:opacity-75"
+          >
+            {t("home.clearSearch")}
+          </Link>
         </div>
       )}
 

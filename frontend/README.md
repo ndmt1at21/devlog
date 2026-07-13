@@ -41,8 +41,8 @@ cd ../backend && make run       # DB_DRIVER=memory by default
 | `BACKEND_INTERNAL_URL`        | Go API origin for SSR fetches + `/api/*` rewrite (`:8080`)     |
 | `NEXT_PUBLIC_SITE_URL`        | Public origin for metadata + sitemap                          |
 | `NEXT_PUBLIC_GA_ID`           | GA4 measurement id — omit to disable analytics                |
-| `NEXT_PUBLIC_GAM_NETWORK_CODE`| Google Ad Manager network code — omit to keep the ad placeholder |
-| `NEXT_PUBLIC_GAM_AD_UNIT`     | In-content ad-unit name (default `devnote_in_content`)        |
+| `NEXT_PUBLIC_ADSENSE_CLIENT`  | AdSense publisher id (`ca-pub-…`) — omit to keep the ad placeholder |
+| `NEXT_PUBLIC_ADSENSE_SLOT`    | In-content display ad-unit slot id (numeric)                  |
 
 ## Structure
 
@@ -72,13 +72,12 @@ src/
   the Go API and forward the session cookie (so the paywall is applied per-user);
   interactive parts (search, theme, comments, coffee, code-copy) are Client
   Components.
-- **Auth** requires the backend's IAM integration to be configured
-  (`IAM_ISSUER_URL` etc.). Without it, content/search/paywall/coffee-demo all work,
-  and auth endpoints return a "not configured" message by design. **Đăng nhập với
-  Google** is a federated (redirect) flow through IAM — "Continue with Google"
-  navigates to `/api/auth/google/login`; when IAM/Google aren't configured it
-  bounces back to `/login?error=…` with an inline message. See the backend
-  `.env.example` for the IAM provisioning it needs.
+- **Auth** is embedded in the Go backend (accounts in its own store; no external
+  service), so login/register work out of the box. **Đăng nhập với Google** is a
+  federated (redirect) flow — "Continue with Google" navigates to
+  `/api/auth/google/login`; when the backend's `GOOGLE_CLIENT_ID` isn't
+  configured it bounces back to `/login?error=…` with an inline message. See the
+  backend `.env.example` for the Google OAuth client setup.
 - **Theming** is token-based: the mockup's light/dark palette lives in
   `globals.css` and is mapped into Tailwind utilities via `@theme inline`, so
   utilities re-resolve when `data-theme` flips.

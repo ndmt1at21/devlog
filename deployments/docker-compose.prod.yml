@@ -1,0 +1,37 @@
+# Production stack for the devlog backend (single service).
+#
+# This file does NOT run MySQL — the DB can be anything reachable from the VPS:
+# a MySQL container, native MySQL on the host, or an external/managed server.
+# Point DB_DSN (in backend.env) at it. For a DB living on this VPS, use the host
+# `host.docker.internal` (resolved via the extra_hosts entry below); for an
+# external DB, use its real hostname/IP. See backend.env.example.
+# Schema migrations are embedded in the binary and applied automatically on startup.
+#
+# The Deploy workflow drives this file automatically:
+#   TAG=sha-xxxxxxx HOST_PORT=8080 docker compose -f docker-compose.prod.yml pull
+#   TAG=sha-xxxxxxx HOST_PORT=8080 docker compose -f docker-compose.prod.yml up -d
+#
+# For a manual restart on the VPS, `docker compose up -d` falls back to :latest.
+name: devlog-backend
+
+services:
+  backend:
+    image: ghcr.io/ndmt1at21/devlog-backend:${TAG:-latest}
+    restart: unless-stopped
+    # Runtime config + secrets, incl. DB_DSN (SESSION_SECRET, APP_BASE_URL, ...).
+    # Created once on the VPS from backend.env.example — never committed.
+    env_file:
+      - backend.env
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - devlog
+
+networks:
+  devlog:
+    external: true

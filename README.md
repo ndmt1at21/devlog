@@ -28,8 +28,8 @@ cd frontend && npm install && npm run dev
 
 Open http://localhost:3000 — browse/search articles, read articles (code blocks,
 diagrams, series + Pro paywall), comment, toggle dark mode, and open the coffee
-modal. Login/register/Pro need IAM (below); without it those endpoints return a
-"chưa được cấu hình" message.
+modal. Login/register work out of the box: auth is embedded in the backend (no
+external service). The first account you register becomes the author.
 
 ## Backend config (`backend/.env.example`)
 
@@ -37,9 +37,8 @@ modal. Login/register/Pro need IAM (below); without it those endpoints return a
 | --- | --- |
 | `DB_DRIVER` | `memory` (default) or `mysql` |
 | `DB_DSN` | MySQL DSN (`parseTime=true&loc=UTC&multiStatements=true`) |
-| `IAM_ISSUER_URL` | tenant issuer base, e.g. `http://localhost:8080/t/devnote` |
-| `IAM_TENANT_ID` / `IAM_CLIENT_ID` / `IAM_CLIENT_SECRET` | OAuth2 client creds |
-| `SESSION_SECRET` / `COOKIE_SECURE` | session cookie sealing |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google login (optional; empty disables it) |
+| `SESSION_SECRET` / `COOKIE_SECURE` | session cookie sealing (also keys access tokens) |
 | `APP_BASE_URL` | frontend origin for payment redirects (default `http://localhost:3000`) |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Stripe Checkout (coffee); empty → demo |
 | `MOMO_PARTNER_CODE` / `MOMO_ACCESS_KEY` / `MOMO_SECRET_KEY` | MoMo (coffee); empty → demo |
@@ -48,42 +47,59 @@ modal. Login/register/Pro need IAM (below); without it those endpoints return a
 
 ```bash
 DB_DRIVER=mysql DB_DSN='devlog:devlog@tcp(localhost:3306)/devlog?parseTime=true&loc=UTC&multiStatements=true' \
-  go run ./cmd/server      # auto-creates schema + seeds on first run
+  go run ./cmd/server      # auto-creates/updates schema on startup
+
+# Optional: load the design's demo articles into a fresh local DB (separate
+# command; the server never seeds).
+DB_DRIVER=mysql DB_DSN='…' go run ./cmd/seed   # or: make seed
 ```
 
-Schema migrations live in `backend/migrations/mysql/` (embedded, applied on
-startup).
+Schema migrations live in `backend/migrations/mysql/` (embedded, versioned
+`NNNN_name.up/down.sql`, applied on startup and tracked in `schema_migrations`).
+They are **DDL only** — no seed rows — so starting the server against production
+never inserts sample content. Demo seeding is a separate, explicit command
+(`cmd/seed`); it migrates then upserts the design content, and is idempotent.
 
-### Auth via IAM (`/home/ndmt1at21/iam`)
+### Auth (embedded)
 
-The backend is a confidential OAuth2 client of IAM (password grant for login,
-`/auth/register` + `/auth/forgot-password` for lifecycle, userinfo for identity;
-tokens kept in an httpOnly session cookie). To enable it:
+Auth runs in-process, embedding the IAM service's core logic instead of calling
+it over HTTP: accounts live in the blog's own store (`users` +
+`refresh_tokens`), passwords are argon2id-hashed (PHC-encoded), access tokens
+are short-lived signed JWTs, and refresh tokens are opaque, hashed at rest, and
+rotated on every use. Tokens are kept in the httpOnly session cookie as before.
+Nothing needs to be provisioned — register an account and log in.
 
-1. Run IAM: `cd ../iam && make compose-up && make run`.
-2. Provision a tenant `devnote`, a **confidential client whose `grant_types`
-   include `password` and `refresh_token`** (required — the password grant is
-   gated per-client), and the demo user `demo@blog.vn` / `123456`.
-3. Set `IAM_ISSUER_URL` (e.g. `http://localhost:8080/t/devnote`), `IAM_CLIENT_ID`,
-   `IAM_CLIENT_SECRET` in `backend/.env` and restart the backend.
+For "Đăng nhập với Google", create a Google OAuth client
+(https://console.cloud.google.com/apis/credentials), register the authorized
+redirect URI `{APP_BASE_URL}/api/v1/auth/google/callback`, and set
+`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `backend/.env`.
 
-> Note: IAM register sends a verification email and doesn't accept a display name,
-> so new accounts must verify before login; seed the demo user as active.
+> Note: with no mail service embedded, register activates the account
+> immediately (no verification email) and forgot-password is a no-op that
+> always reports success (anti-enumeration).
 
-### Publishing articles (IAM permission `articles:create`)
+### Publishing articles (permission `articles:create`)
 
-Logged-in users holding the IAM permission **`articles:create`** can publish from
+Logged-in users holding the **`articles:create`** permission can publish from
 `/articles/new` (Markdown/README or a rich-text block editor; both normalize to
 the same block model). The backend verifies the permission on every
-`POST /api/v1/articles` via IAM's policy decision endpoint (`POST
-{issuer}/authz/decision`); the account menu's "Viết bài mới" entry is only a UI
-hint snapshotted into the session at login/refresh. To grant it, in the
-`devnote` tenant:
+`POST /api/v1/articles`; the account menu's "Viết bài mới" entry is only a UI
+hint snapshotted into the session at login/refresh.
 
-1. Create resource `articles` with action `create`, then permission
-   `articles:create`.
-2. Bind the permission to a role (e.g. `author`) and assign the role to the
-   writer's account. The author picks it up at next login (or token refresh).
+Authors can also **edit their own articles** from `/articles/{slug}/edit` (an
+"Chỉnh sửa" link appears on the article for its author). `PUT
+/api/v1/articles/{slug}` requires the same `articles:create` permission **and**
+that the caller is the article's author, matched by the stable **`author_id`**
+(the user id stamped at create time — added in migration `0005`). Seed/imported
+content has a `NULL` `author_id` and is read-only. The slug stays fixed so
+existing links, comments and reactions keep working.
+
+Permissions derive from the user's role (`reader`, `author`, `admin`; roles
+`author`/`admin` hold `articles:create`). **The first registered account is
+bootstrapped as `author`**; everyone after that is a `reader`. To promote
+someone later, update their row (MySQL mode):
+`UPDATE users SET role='author' WHERE email='...'` — it takes effect on their
+next request (decisions read the live role, not the token).
 
 ## Frontend config (`frontend/.env.local`)
 
@@ -100,6 +116,7 @@ The browser reaches the API same-origin via a `/api/*` rewrite (see
 
 - `GET /api/articles` · `GET /api/articles/featured` · `GET /api/categories`
 - `GET /api/articles/{slug}` (server-side Pro paywall)
+- `POST /api/articles` · `PUT /api/articles/{slug}` (author-only publish/edit; `articles:create`)
 - `GET|POST /api/articles/{slug}/comments`
 - `POST /api/auth/{login,register,forgot-password,logout}` · `GET /api/auth/me`
 - `GET /api/pro/plans` · `GET|POST /api/me/subscription`

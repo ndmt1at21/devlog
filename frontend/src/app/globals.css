@@ -104,7 +104,8 @@
 
   --font-sans: var(--font-be-vietnam), -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", Consolas,
+    "Liberation Mono", monospace;
 }
 
 @layer base {
@@ -114,14 +115,34 @@
   }
   body {
     margin: 0;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
     font-family: var(--font-sans);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     transition: background-color 0.28s ease, color 0.28s ease;
   }
+  /* Let the main content grow so the footer is pushed to the bottom even when
+     there isn't enough content to fill the viewport. */
+  body > main {
+    flex: 1 0 auto;
+  }
+  /* Soft accent wash instead of the full brand yellow — keep the text's own
+     color so selection stays readable in both themes. */
   ::selection {
-    background: var(--accent);
-    color: var(--on-accent);
+    background: color-mix(in srgb, var(--accent) 26%, transparent);
+  }
+  /* Brand wordmark swap: brown logo on light, yellow logo on dark (see
+     logo/logo/huong-dan.md). Both are rendered; the theme hides one. */
+  .logo-dark {
+    display: none;
+  }
+  [data-theme="dark"] .logo-light {
+    display: none;
+  }
+  [data-theme="dark"] .logo-dark {
+    display: inline-block;
   }
   button {
     font-family: inherit;
@@ -272,6 +293,7 @@
   font-size: 13.5px;
   line-height: 1.7;
   white-space: pre;
+  tab-size: 4;
 }
 .code-shiki .shiki code {
   font-family: inherit;

@@ -7,7 +7,9 @@ import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 // NOTE (Cloudflare): this rewrite destination is baked in at BUILD time, so
 // BACKEND_INTERNAL_URL must be set in the build environment, not just as a
 // runtime wrangler var.
-const BACKEND = process.env.BACKEND_INTERNAL_URL ?? "http://localhost:8080";
+// `||` (not `??`): a missing CI secret arrives as "" and must fall back too,
+// otherwise the rewrite destination becomes a self-referencing "/api/:path*".
+const BACKEND = process.env.BACKEND_INTERNAL_URL || "http://localhost:8080";
 
 const nextConfig: NextConfig = {
   async rewrites() {

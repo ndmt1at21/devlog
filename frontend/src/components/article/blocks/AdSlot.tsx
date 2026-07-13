@@ -4,19 +4,21 @@ import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { track } from "@/lib/analytics";
 import { useImpression } from "@/hooks/useImpression";
-import { gamEnabled } from "@/lib/ads";
+import { slotEnabled } from "@/lib/ads";
 import { proEnabled } from "@/lib/features";
-import { GamAdSlot } from "@/components/ads/GamAdSlot";
+import { AdSenseSlot } from "@/components/ads/AdSenseSlot";
 import { useT } from "@/lib/i18n/provider";
 
 /**
- * In-content ad. Serves a real Google Ad Manager unit when configured
- * (NEXT_PUBLIC_GAM_NETWORK_CODE), otherwise shows the design placeholder. Hidden
- * for Pro readers (gated by the caller); fires one GA impression per mount.
+ * In-content ad. Serves a real Google AdSense unit when configured
+ * (NEXT_PUBLIC_ADSENSE_CLIENT + NEXT_PUBLIC_ADSENSE_SLOT), otherwise shows the
+ * design placeholder. Hidden for Pro readers (gated by the caller); fires one GA
+ * impression per mount.
  */
 export function AdSlot({ slot = "in-content" }: { slot?: string }) {
   const router = useRouter();
   const t = useT();
+  const showAd = slotEnabled(slot);
   const onImpression = useCallback(
     () => track("ad_impression", { slot }),
     [slot],
@@ -28,7 +30,7 @@ export function AdSlot({ slot = "in-content" }: { slot?: string }) {
       ref={ref}
       onClick={() => track("ad_click", { slot })}
       className={`relative my-9 rounded-[14px] bg-[color:var(--faf)] p-[18px] text-center ${
-        gamEnabled
+        showAd
           ? "border border-border"
           : "border border-dashed border-[color:var(--d8)]"
       }`}
@@ -37,8 +39,8 @@ export function AdSlot({ slot = "in-content" }: { slot?: string }) {
         {t("ad.label")}
       </span>
       <div className="flex min-h-[88px] flex-col items-center justify-center gap-1.5 pt-3">
-        {gamEnabled ? (
-          <GamAdSlot slot={slot} />
+        {showAd ? (
+          <AdSenseSlot slot={slot} />
         ) : (
           <>
             <span className="font-mono text-[12.5px] text-[color:var(--ca30)]">

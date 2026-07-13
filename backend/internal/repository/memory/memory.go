@@ -15,23 +15,35 @@ import (
 	"github.com/ndmt1at21/devlog/backend/internal/seed"
 )
 
+// reactionKey identifies one user's reaction of one kind on one article.
+type reactionKey struct {
+	slug, userID string
+	kind         domain.ReactionKind
+}
+
 // Store is a concurrency-safe in-memory data store.
 type Store struct {
-	mu       sync.RWMutex
-	articles []domain.Article
-	series   map[string]domain.Series
-	comments map[string][]domain.Comment
-	subs     map[string]domain.Subscription
-	coffee   map[string]domain.CoffeeOrder
+	mu            sync.RWMutex
+	articles      []domain.Article
+	series        map[string]domain.Series
+	comments      map[string][]domain.Comment
+	reactions     map[reactionKey]time.Time
+	subs          map[string]domain.Subscription
+	coffee        map[string]domain.CoffeeOrder
+	users         map[string]domain.User         // by id
+	refreshTokens map[string]domain.RefreshToken // by token hash
 }
 
 // New returns a Store preloaded with the seed content.
 func New() *Store {
 	s := &Store{
-		series:   make(map[string]domain.Series),
-		comments: make(map[string][]domain.Comment),
-		subs:     make(map[string]domain.Subscription),
-		coffee:   make(map[string]domain.CoffeeOrder),
+		series:        make(map[string]domain.Series),
+		comments:      make(map[string][]domain.Comment),
+		reactions:     make(map[reactionKey]time.Time),
+		subs:          make(map[string]domain.Subscription),
+		coffee:        make(map[string]domain.CoffeeOrder),
+		users:         make(map[string]domain.User),
+		refreshTokens: make(map[string]domain.RefreshToken),
 	}
 	s.articles = seed.Articles()
 	sort.SliceStable(s.articles, func(i, j int) bool { return s.articles[i].Ord < s.articles[j].Ord })
@@ -48,8 +60,11 @@ func New() *Store {
 func (s *Store) Articles() domain.ArticleRepository           { return (*articleRepo)(s) }
 func (s *Store) Series() domain.SeriesRepository              { return (*seriesRepo)(s) }
 func (s *Store) Comments() domain.CommentRepository           { return (*commentRepo)(s) }
+func (s *Store) Reactions() domain.ReactionRepository         { return (*reactionRepo)(s) }
 func (s *Store) Subscriptions() domain.SubscriptionRepository { return (*subRepo)(s) }
 func (s *Store) CoffeeOrders() domain.CoffeeOrderRepository   { return (*coffeeRepo)(s) }
+func (s *Store) Users() domain.UserRepository                 { return (*userRepo)(s) }
+func (s *Store) RefreshTokens() domain.RefreshTokenRepository { return (*refreshTokenRepo)(s) }
 func (s *Store) Ping(context.Context) error                   { return nil }
 func (s *Store) Close() error                                 { return nil }
 
@@ -70,7 +85,7 @@ func (r *seriesRepo) GetBySlug(_ context.Context, slug string) (domain.Series, e
 
 type articleRepo Store
 
-func summary(a domain.Article) domain.Article { a.Body = nil; return a }
+func summary(a domain.Article) domain.Article { a.Body = nil; a.Translations = nil; return a }
 
 func (r *articleRepo) List(_ context.Context, f domain.ArticleFilter) ([]domain.Article, error) {
 	r.mu.RLock()
@@ -101,18 +116,16 @@ func (r *articleRepo) GetBySlug(_ context.Context, slug string) (domain.Article,
 	return domain.Article{}, domain.ErrNotFound
 }
 
-func (r *articleRepo) Featured(_ context.Context) (domain.Article, error) {
+func (r *articleRepo) Featured(_ context.Context) ([]domain.Article, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	for _, a := range r.articles {
+	var out []domain.Article
+	for _, a := range r.articles { // already sorted by Ord
 		if a.Featured {
-			return summary(a), nil
+			out = append(out, summary(a))
 		}
 	}
-	if len(r.articles) > 0 {
-		return summary(r.articles[0]), nil
-	}
-	return domain.Article{}, domain.ErrNotFound
+	return out, nil
 }
 
 func (r *articleRepo) Categories(_ context.Context) ([]string, error) {
@@ -150,6 +163,30 @@ func (r *articleRepo) Create(_ context.Context, a domain.Article) (domain.Articl
 	}
 	r.articles = append(r.articles, a)
 	return a, nil
+}
+
+func (r *articleRepo) Update(_ context.Context, a domain.Article) (domain.Article, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, ex := range r.articles {
+		if ex.Slug == a.Slug {
+			// Overlay only the editable fields, preserving the stored row's
+			// identity, ordering and series placement.
+			ex.Lang = a.Lang
+			ex.Category = a.Category
+			ex.Cover = a.Cover
+			ex.CoverAlt = a.CoverAlt
+			ex.ReadTime = a.ReadTime
+			ex.Title = a.Title
+			ex.Excerpt = a.Excerpt
+			ex.Tags = a.Tags
+			ex.Body = a.Body
+			ex.Translations = a.Translations
+			r.articles[i] = ex
+			return ex, nil
+		}
+	}
+	return domain.Article{}, domain.ErrNotFound
 }
 
 func (r *articleRepo) SeriesParts(_ context.Context, seriesSlug string) ([]domain.Article, error) {
@@ -193,6 +230,66 @@ func (r *commentRepo) Create(_ context.Context, c domain.Comment) (domain.Commen
 	}
 	r.comments[c.ArticleSlug] = append(r.comments[c.ArticleSlug], c)
 	return c, nil
+}
+
+// ---- reactions ----
+
+type reactionRepo Store
+
+func (r *reactionRepo) Set(_ context.Context, kind domain.ReactionKind, slug, userID string, on bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	key := reactionKey{slug: slug, userID: userID, kind: kind}
+	if !on {
+		delete(r.reactions, key)
+		return nil
+	}
+	if _, ok := r.reactions[key]; !ok {
+		r.reactions[key] = time.Now().UTC()
+	}
+	return nil
+}
+
+func (r *reactionRepo) Status(_ context.Context, slug, userID string) (domain.ReactionStatus, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var st domain.ReactionStatus
+	for k := range r.reactions {
+		if k.slug != slug {
+			continue
+		}
+		if k.kind == domain.ReactionLike {
+			st.Likes++
+			if userID != "" && k.userID == userID {
+				st.Liked = true
+			}
+		}
+		if k.kind == domain.ReactionBookmark && userID != "" && k.userID == userID {
+			st.Bookmarked = true
+		}
+	}
+	return st, nil
+}
+
+func (r *reactionRepo) BookmarkedSlugs(_ context.Context, userID string) ([]string, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	type saved struct {
+		slug string
+		at   time.Time
+	}
+	var marks []saved
+	for k, at := range r.reactions {
+		if k.kind == domain.ReactionBookmark && k.userID == userID {
+			marks = append(marks, saved{slug: k.slug, at: at})
+		}
+	}
+	sort.SliceStable(marks, func(i, j int) bool { return marks[i].at.After(marks[j].at) })
+	out := make([]string, 0, len(marks))
+	for _, m := range marks {
+		out = append(out, m.slug)
+	}
+	return out, nil
 }
 
 // ---- subscriptions ----

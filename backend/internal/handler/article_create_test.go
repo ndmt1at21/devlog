@@ -16,16 +16,16 @@ import (
 	"github.com/ndmt1at21/devlog/backend/internal/session"
 )
 
-// fakeAuth is an authn.Provider stub: every login succeeds and the IAM
+// fakeAuth is an authn.Provider stub: every login succeeds and the
 // permission decision is fixed to `allow`.
 type fakeAuth struct{ allow bool }
 
 func (f *fakeAuth) Login(context.Context, string, string) (*authn.TokenSet, error) {
 	return &authn.TokenSet{AccessToken: "at", RefreshToken: "rt", ExpiresIn: 3600}, nil
 }
-func (f *fakeAuth) Register(context.Context, string, string) error { return nil }
-func (f *fakeAuth) ForgotPassword(context.Context, string) error   { return nil }
-func (f *fakeAuth) Logout(context.Context, string) error           { return nil }
+func (f *fakeAuth) Register(context.Context, string, string, string) error { return nil }
+func (f *fakeAuth) ForgotPassword(context.Context, string) error           { return nil }
+func (f *fakeAuth) Logout(context.Context, string) error                   { return nil }
 func (f *fakeAuth) Refresh(context.Context, string) (*authn.TokenSet, error) {
 	return &authn.TokenSet{AccessToken: "at2", ExpiresIn: 3600}, nil
 }
@@ -43,10 +43,16 @@ func (f *fakeAuth) CheckPermissions(context.Context, string, []string) (bool, er
 // newAuthedClient boots a server with the fake IAM provider and returns a
 // cookie-carrying client that has already logged in.
 func newAuthedClient(t *testing.T, allow bool) (*httptest.Server, *http.Client) {
+	return newAuthedClientCfg(t, allow, config.Config{DBDriver: "memory"})
+}
+
+// newAuthedClientCfg is newAuthedClient with a caller-supplied config (used by
+// upload tests to toggle the S3 settings).
+func newAuthedClientCfg(t *testing.T, allow bool, cfg config.Config) (*httptest.Server, *http.Client) {
 	t.Helper()
 	api := &handler.API{
 		Store:    memory.New(),
-		Cfg:      config.Config{DBDriver: "memory"},
+		Cfg:      cfg,
 		Auth:     &fakeAuth{allow: allow},
 		Sessions: session.New("test-secret", false),
 	}

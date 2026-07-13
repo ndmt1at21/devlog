@@ -1,6 +1,14 @@
 // API response types — mirror the Go backend DTOs (backend/internal/handler).
 
-export type BlockType = "p" | "h" | "quote" | "code" | "diagram" | "list" | "ad";
+export type BlockType =
+  | "p"
+  | "h"
+  | "quote"
+  | "code"
+  | "diagram"
+  | "list"
+  | "img"
+  | "ad";
 
 export interface Block {
   type: BlockType;
@@ -12,23 +20,63 @@ export interface Block {
   /** List items for `list` blocks; may carry inline markdown spans. */
   items?: string[];
   ordered?: boolean;
+  /** Image URL for `img` blocks (must live under the public image origin). */
+  src?: string;
+  /** Alternative text for `img` blocks. */
+  alt?: string;
   /** Server-rendered Shiki HTML for `code` blocks (added during SSR). */
   html?: string;
 }
 
-/** Payload for POST /articles. Body is either markdown source or editor blocks. */
-export interface NewArticleInput {
+/** Response of POST /uploads: PUT the bytes to uploadUrl, embed publicUrl. */
+export interface UploadTicket {
+  uploadUrl: string;
+  publicUrl: string;
+}
+
+/** One non-primary language variant of an article (read side). */
+export interface Translation {
+  title: string;
+  excerpt: string;
+  coverAlt?: string;
+  body: Block[];
+}
+
+/** One language's content within a create/update payload. `lang` is "vi" | "en". */
+export interface LocalizedInput {
+  lang: string;
   title: string;
   excerpt?: string;
-  category: string;
-  tags: string[];
+  coverAlt?: string;
   format: "markdown" | "blocks";
   content?: string;
   body?: Block[];
 }
 
+/**
+ * Payload for POST/PUT /articles. The primary-language content sits at the top
+ * level; `translations` carries the other language(s) (may be omitted —
+ * "publish now, translate later"). Cover image, category and tags are shared
+ * across languages.
+ */
+export interface NewArticleInput {
+  lang: string;
+  title: string;
+  excerpt?: string;
+  category: string;
+  cover?: string;
+  coverAlt?: string;
+  tags: string[];
+  format: "markdown" | "blocks";
+  content?: string;
+  body?: Block[];
+  translations?: LocalizedInput[];
+}
+
 export interface ArticleSummary {
   slug: string;
+  /** Language of this summary's title/excerpt ("vi" | "en"). */
+  lang: string;
   title: string;
   excerpt: string;
   category: string;
@@ -40,6 +88,7 @@ export interface ArticleSummary {
   publishedAt: string;
   tags: string[];
   cover?: string;
+  coverAlt?: string;
   featured: boolean;
   isSeries: boolean;
   series?: string;
@@ -61,6 +110,14 @@ export interface PartLink {
 
 export interface ArticleDetail extends ArticleSummary {
   body: Block[];
+  /** Non-primary language variants, keyed by locale ("en", …). Absent when the
+   * article exists in one language only. The base fields carry the primary
+   * language (ArticleSummary.lang). */
+  translations?: Record<string, Translation>;
+  /** Every language the article is published in, primary first. */
+  availableLangs: string[];
+  /** True when the requesting user is this article's author (server-computed). */
+  editable: boolean;
   locked: boolean;
   inSeries: boolean;
   seriesTitle?: string;
@@ -75,6 +132,12 @@ export interface Comment {
   text: string;
   time: string;
   initial: string;
+}
+
+export interface ReactionStatus {
+  likes: number;
+  liked: boolean;
+  bookmarked: boolean;
 }
 
 export interface Plan {
