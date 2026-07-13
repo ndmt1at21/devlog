@@ -13,7 +13,7 @@ is flawless.
 ### Content Quality (30 points)
 | Check | Pts | Pass criteria |
 |-------|-----|---------------|
-| Depth/comprehensiveness | 7 | Covers the topic thoroughly, no major gaps vs. top-ranking pages |
+| Depth/comprehensiveness | 7 | Covers the topic thoroughly, no major gaps vs. top-ranking pages; sections follow the why → high-level → details arc |
 | Readability | 7 | Flesch 60–70 ideal (55–75 acceptable), Grade 7–8 |
 | Originality markers | 5 | Genuine original data / experience / insight present |
 | Sentence & paragraph structure | 4 | Avg sentence 15–20 words (≤25% over 20); paragraphs 40–80 words; H2 every 200–300 words |
@@ -74,7 +74,8 @@ Report every issue with a priority:
 (zero tolerance), broken heading hierarchy, paragraphs >200 words, missing
 author attribution, missing Key Takeaways box.
 
-**High:** H2s without answer-first openings, no FAQ, <8 sourced statistics,
+**High:** narrative arc inverted (implementation detail before the why is
+established), H2s without answer-first openings, no FAQ, <8 sourced statistics,
 title outside 40–60 chars, missing/short meta description, no internal links,
 Flesch outside 55–75, paragraphs >150 words, passive voice >15%, banned
 phrases present.

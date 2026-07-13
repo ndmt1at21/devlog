@@ -94,6 +94,29 @@ Hard rules (the SEO checks still apply):
 - The post must cash every promise the title makes: curiosity, not clickbait
 - No ALL CAPS, no "SHOCKING", no listicle bait unless the template is a listicle
 
+## Narrative arc: why → high level → details
+
+Every post, whatever the template, walks the reader down the same slope:
+
+1. **Why (the cause)** — open with the problem, pain, or need that makes the
+   topic necessary: what breaks, what it costs, who hits it. The reader must
+   feel why this matters before any solution appears.
+2. **High level (the idea)** — then the bird's-eye view: what the solution or
+   concept is, its core mental model, in plain words — before any code,
+   configuration, or step-by-step.
+3. **Details (the how)** — only then the deep-dive H2s: implementation,
+   steps, numbers, edge cases, trade-offs.
+
+Order the H2s along this slope and never invert it: don't open the body with
+implementation detail, and don't introduce a mechanism before the reader knows
+why they'd need it. Map the arc onto whichever template was chosen (a how-to
+still opens with why the task matters before prerequisites; a tutorial states
+the pain before the first numbered step).
+
+This coexists with answer-first formatting: a comparison still leads with its
+verdict and every H2 still opens with its answer — the arc governs the order
+of sections, not the shape of paragraphs.
+
 ## Outline skeleton (generic)
 
 ```
@@ -112,7 +135,8 @@ Hard rules (the SEO checks still apply):
 - Citation capsule
 - [INTERNAL-LINK: anchor → target description]
 
-... 6–8 H2 sections total; 60–70% as questions, the rest as statements
+... 6–8 H2 sections total, ordered along the narrative arc (why →
+    high level → details); 60–70% as questions, the rest as statements
     for variety; each 200–400 words ...
 
 ## FAQ (3–5 questions, 40–60 word answers, each with a stat)
@@ -249,18 +273,42 @@ Maximum 1 brand mention (author-bio context). Educational tone throughout.
 
 ## Naturalness rules (anti-AI-tells)
 
+- **Voice**: an experienced professional talking to a peer — conversational
+  yet authoritative, never a robot presenting a textbook
+- **Plain words**: pick the simple, common word over the fancy one — "use"
+  not "utilize", "help" not "facilitate", "start" not "commence", "buy" not
+  "purchase". A smart reader new to the topic should follow every sentence on
+  first read. Necessary jargon gets a one-clause plain-language explanation on
+  first use ("idempotent — running it twice gives the same result"); jargon
+  that isn't necessary gets cut. Same rule in Vietnamese: everyday words over
+  formal or Sino-Vietnamese phrasing when a common word exists
 - **Banned phrases** — never use: "in today's digital landscape",
   "it's important to note", "dive into", "delve", "game-changer",
   "navigate the landscape", "revolutionize", "seamlessly", "cutting-edge",
   "harness the power of", "leverage" (as a verb), "crucial", "elevate",
   "foster", "landscape" (overused), "multifaceted", "robust", "tapestry",
-  "embark", "unlock", "unleash", "in the realm of", "furthermore" (as a
-  paragraph opener)
+  "embark", "unlock", "unleash", "in the realm of", "unprecedented",
+  "transformative", "empower", "furthermore" (as a paragraph opener)
 - **No em dashes.** Replace with commas, colons, periods, or split sentences.
 - **Contractions**: use them naturally ("it's", "don't", "we've")
 - **Rhetorical questions**: roughly one every 200–300 words
 - **Hedging where honest**: "in our experience", "we've found that"
-- **Burstiness**: verify the finished draft mixes short and long sentences
+- **Burstiness**: verify the finished draft mixes short and long sentences.
+  Some short. Some long and descriptive.
+- **Varied openings**: no repeated sentence openings — consecutive sentences
+  (and consecutive paragraph openers) never start with the same word or
+  construction
+- **Break the symmetry**: avoid the "Rule of Threes" and other predictable,
+  overly symmetrical structures. Don't make every list exactly three items or
+  every section the same shape; vary list lengths and section rhythms the way
+  a human would
+- **Show, don't tell**: strong active verbs over weak adjectives ("latency
+  collapsed from 90ms to 4ms", not "performance was significantly better");
+  specific, concrete details over broad generalizations
+- **No filler bookends**: never open with "In this article, we will
+  discuss..." or close with "In conclusion...". The introduction hooks with a
+  statistic and gets moving; the conclusion earns its keep with takeaways and
+  a CTA, not a restatement. No generic filler paragraphs anywhere
 
 ## Visual pacing
 
@@ -307,6 +355,8 @@ Example:
 ## Pre-handoff self-check
 
 Before passing the draft to Stage 3, verify:
+- [ ] Sections follow the narrative arc: why → high level → details, never
+      detail-first
 - [ ] Every H2 opens with stat + source (40–60 words)
 - [ ] No paragraph over 150 words
 - [ ] All statistics carry the evidence triple; source block present at bottom
@@ -319,6 +369,11 @@ Before passing the draft to Stage 3, verify:
 - [ ] FAQ with 3–5 stat-bearing answers
 - [ ] Meta description 150–160 chars with a stat
 - [ ] Zero banned phrases, zero em dashes, contractions present
+- [ ] Plain words throughout; every jargon term either explained on first
+      use or cut
+- [ ] No repeated sentence/paragraph openings; no filler bookends
+      ("In this article...", "In conclusion..."); no generic filler paragraphs
+- [ ] Lists and sections vary in length and shape (no forced Rule of Threes)
 - [ ] Visual marker every 300–500 words, types alternating
 - [ ] Both language versions (vi + en) present with full parity, unless single-language requested
 - [ ] Vietnamese version reads naturally; untranslatable technical terms kept in English

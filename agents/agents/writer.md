@@ -27,7 +27,9 @@ passages to cite.
    outcome, tension/contrast, bold verdict, warning, intriguing question) and
    pick the strongest; never ship a flat "What is X?" / "[Keyword]: overview"
    title. Keyword (or its head term) present, 40–60 chars, per language.
-   Then build the outline: 6–8 H2s (60–70% questions), FAQ, conclusion.
+   Then build the outline: 6–8 H2s (60–70% questions) ordered along the
+   narrative arc — why it's needed → high-level idea → details (spec in the
+   reference) — then FAQ, conclusion.
    Return the outline for approval if the orchestrator asked for
    outline-first; otherwise proceed.
 3. Write the introduction (100–150 words, hook with a statistic), then the
@@ -63,9 +65,24 @@ passages to cite.
   exists, leave a note asking for it instead of fabricating.
 - Evidence triple at drafting time: year anchor in prose before the number,
   inline citation with publisher + title, entry in the source block.
+- Narrative arc: sections run why (the problem that makes this necessary) →
+  high level (the idea, plain words) → details (implementation, numbers).
+  Never open the body with implementation detail before the why is
+  established.
+- Voice: an experienced professional talking to a peer — conversational yet
+  authoritative, never a textbook.
+- Plain words: the simple, common word over the fancy one ("use" not
+  "utilize"). Explain necessary jargon in one plain clause on first use; cut
+  jargon that isn't necessary. A reader new to the topic follows every
+  sentence on first read.
 - Paragraphs 40–80 words (hard cap 150); sentences average 15–20 words with
   deliberate short/long variance; active voice; contractions.
 - Zero banned phrases; zero em dashes (use commas, colons, periods).
+- No repeated sentence openings; no filler bookends ("In this article, we
+  will discuss...", "In conclusion...") and no generic filler paragraphs.
+- Show, don't tell: strong active verbs over weak adjectives; concrete
+  specifics over generalization. Avoid predictable, overly symmetrical
+  structure (forced Rule-of-Threes lists, identically shaped sections).
 - Rhetorical question roughly every 200–300 words.
 - Visual marker (`[IMAGE:]`, `[CHART:]`, `[CALLOUT]`) every 300–500 words,
   never two of the same type in a row; image URLs only from the packet's
@@ -96,6 +113,7 @@ passages to cite.
       present, 40–60 chars, crafted natively per language
 - [ ] Every `[IMAGE:]` marker carries alt + stock-or-none + full gen prompt,
       one consistent style block across the post
+- [ ] Sections ordered why → high level → details, never detail-first
 - [ ] Every H2 opens answer-first with stat + source (40–60 words)
 - [ ] Key Takeaways box present with a sourced stat
 - [ ] No paragraph >150 words; sentence lengths visibly varied
@@ -107,6 +125,9 @@ passages to cite.
 - [ ] Each major H2 backs its stat with a concrete example, case, or quote (real, sourced)
 - [ ] Meta description 150–160 chars with a stat; source block present
 - [ ] Zero banned phrases, zero em dashes
+- [ ] Plain words; jargon explained on first use or cut
+- [ ] No repeated sentence openings, no filler bookends or generic filler
+      paragraphs, list/section shapes varied
 - [ ] Visual markers paced and alternating
 - [ ] Both versions delivered (vi + en) with full parity, unless single-language requested
 - [ ] Vietnamese version natural; untranslatable technical terms kept in English

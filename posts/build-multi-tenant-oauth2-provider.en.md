@@ -1,6 +1,6 @@
 ---
 title: "Build a Multi-Tenant OAuth2 Provider: The Architecture"
-description: "88% of basic web-app attacks used stolen credentials (Verizon DBIR 2025). This series designs a multi-tenant OAuth2/OIDC provider in Go, from the ground up."
+description: "Design notes for a multi-tenant OAuth2/OIDC provider in Go: why build one when credentials touch 39% of breaches (DBIR 2026), and the architecture map."
 slug: "build-multi-tenant-oauth2-provider"
 lang: "en"
 alternate: "tu-viet-oauth2-oidc-provider-da-tenant.vi.md"
@@ -11,161 +11,254 @@ lastUpdated: "2026-07-11"
 tags: ["iam", "oauth2", "oidc", "golang", "multi-tenant", "authentication", "system-design"]
 series: "designing-a-multi-tenant-iam-service"
 seriesTitle: "Designing a Multi-Tenant IAM Service in Go"
-seriesDescription: "Build a real multi-tenant OAuth2/OIDC provider in Go: tenancy, a grant registry, token rotation, dynamic RBAC, federation, and a gateway PDP."
+seriesDescription: "Build a real multi-tenant OAuth2/OIDC provider in Go: tenancy, grant registry, token rotation, dynamic RBAC, federation, and a gateway PDP."
 part: 1
-partTitle: "The architecture"
-cover: "https://images.unsplash.com/photo-1768839720936-87ce3adf2d08?w=1200&h=630&fit=crop&q=80"
-coverAlt: "A combination lock resting on a computer keyboard, a stand-in for the authentication and authorization layer that sits between users and a system."
-coverGen: "A single hexagon labeled as a tenant, holding a key and a shield, connected by clean lines to three API doors, isometric flat vector illustration, dark navy background, cyan and orange accents, clean geometric lines, no gradients, 1200x630, no text, no words, no logos"
+partTitle: "The Architecture"
+cover: "https://images.unsplash.com/photo-1648071343677-fac075603d3c?w=1200&h=630&fit=crop&q=80"
+coverAlt: "A dark three-dimensional rendering of interlocking hexagonal shapes emerging from a black background, evoking a mesh of isolated tenant cells in a multi-tenant system."
+coverGen: "A honeycomb mesh of interlocking hexagonal cells seen from above, one hexagon lit in orange containing a stylized key and a small shield outline while the others glow faint cyan, thin connection lines running between cells, isometric flat vector illustration, dark navy background, cyan and orange accents, clean geometric lines, no gradients, 1200x630, no text, no words, no logos"
 ---
 
 # Build a Multi-Tenant OAuth2 Provider: The Architecture
 
-_By **ndmt1at21**, backend engineer. Published July 11, 2026. Part 1 of the series **"Designing a Multi-Tenant IAM Service in Go."**_
+_By **ndmt1at21**, backend engineer. Published July 11, 2026. Part 1 of the series **"Designing a Multi-Tenant IAM Service in Go"**._
 
-According to the Verizon 2025 DBIR, 88% of attacks against basic web applications involved stolen credentials, and 60% of breaches involved the human element ([Verizon, "2025 Data Breach Investigations Report"](https://www.verizon.com/business/resources/reports/dbir/)). In the same window, OWASP moved Broken Access Control to the number-one spot in its 2021 Top 10, present in 94% of tested applications ([OWASP Top 10:2021, A01](https://owasp.org/Top10/2021/A01_2021-Broken_Access_Control/)). In short: the place a system breaks most often is *who gets in* and *what they can do*. That's exactly the job an IAM service takes on.
+In the 2026 DBIR (published May 2026), Verizon analyzed 22,000+ confirmed breaches across 145 countries and logged a milestone: for the first time in the report's 19-year history, stolen credentials lost the #1 entry-point spot, ceding it to vulnerability exploitation at 31% ([Verizon, "2026 Data Breach Investigations Report"](https://www.verizon.com/about/news/breach-industry-wide-dbir-finds)). Good news for people who build IAM? Not quite. The same report finds credential abuse still present in 39% of all breaches when you measure the entire attack chain (per Push Security's review, "What the Verizon DBIR tells us about breaches in 2026"). Entry points change; the thing attackers carry through the whole campaign is still identity.
 
-This series is my design notes from building a multi-tenant IAM service in Go: an OAuth2 authorization server that is also an OpenID Connect provider, with built-in RBAC, federated login, passwordless, and a policy-decision-point role for an API gateway. Part 1 doesn't touch detailed code. It draws the whole-system map and, more importantly, says *why* each piece exists, so the later parts read light. [INTERNAL-LINK: choosing a database for a multi-tenant system → storage-selection post]
+This series is my design notes from building a multi-tenant IAM service in Go: an OAuth2 authorization server that doubles as an OpenID Connect provider, with RBAC, federated login, passwordless, and a policy decision point (PDP) role for the API gateway. Part 1 stays away from line-by-line code. It draws the whole-system map and answers the question that matters most: why each piece exists. [INTERNAL-LINK: how to choose a database for a multi-tenant system → storage-selection post for SaaS]
 
 > **Key takeaways**
 >
-> - This IAM packs OAuth2 + OIDC + RBAC + federation + passwordless + PDP into one stateless Go service, running multi-tenant on a shared database.
-> - 88% of basic web-app attacks involved stolen credentials (Verizon DBIR 2025); Broken Access Control is #1 in OWASP Top 10 2021. Auth and authz are where the investment pays off.
-> - Hexagonal architecture: the domain and its repository interfaces stand alone, and everything SQL/cache/HTTP is just an adapter plugged in behind them. Swapping Postgres for MySQL never touches business logic.
-> - Multi-tenancy by one `tenant_id` column on every tenant-owned row, with a separate OIDC issuer per tenant.
-> - "Build vs. buy" has no universal answer: this post says plainly when to build and when to buy.
+> - Credential abuse shows up in 39% of all breaches in Verizon's 2026 DBIR; IAM remains the front door most worth reinforcing.
+> - One stateless Go service packs OAuth2 + OIDC + RBAC + federation + passwordless + PDP, running multi-tenant on a shared database.
+> - Hexagonal core: the domain knows nothing about SQL; Postgres and MySQL are two adapters behind one set of interfaces.
+> - Build vs buy has no universal answer: this post ships a decision table and 3-year cost figures so you can weigh it yourself.
 
-## Why is IAM the highest-leverage thing to invest in?
+## Why is IAM the best place to invest first?
 
-Because every request in the system has to answer two questions before it does anything: *who are you* and *what are you allowed to do*. The first is authentication, the second is authorization. IAM is the piece that answers both. It's the front door of the whole system, and if the front door is wrong, every security layer behind it is nearly meaningless.
+Because identity runs through nearly every attack: credential abuse appears in 39% of all breaches in the 2026 DBIR (Verizon, summarized by SpyCloud, "Top Takeaways from the 2026 Verizon DBIR"). Every request has to answer two questions before doing anything at all: who are you, and what are you allowed to do. IAM is the piece that answers both.
 
-The numbers up top say it plainly: stolen credentials are the most common way in, and broken access control is the #1 web risk. Both are failures at the IAM layer, not at the firewall or the network. Attackers usually don't break the wall; they walk straight through the door with a key they stole, or through the right door into a room they were never supposed to open.
+The interesting part of the 2026 DBIR is that at first glance it argues the opposite. Vulnerability exploitation now opens 31% of breaches, and credentials fell off the #1 entry spot for the first time in 19 years. SpyCloud's read of the data is blunt, though: the way in may be an exploit, but stolen credentials are how attackers move laterally, escalate privileges, and monetize their access. The exploit opens the door; identity carries them the rest of the way.
 
-[CALLOUT] IAM in one line: the right person, the right rights, at the right time. "Right person" is authentication, "right rights" is authorization, "right time" is tokens that expire and can be revoked. The whole series is about getting those three solid.
+Cost data points in the same direction. IBM's "Cost of a Data Breach Report 2025" puts breaches that start with compromised credentials at $4.67M on average and 246 days to identify and contain, the slowest of any vector. That's eight months of someone logging in "legitimately" with a stolen key. What firewall catches that?
 
-That's why IAM is worth more investment than almost any other component: get it right once and every service behind it is shielded; get it wrong once and the whole system is exposed at the same time. It's shared infrastructure, not a feature of any one app. Once that role is clear, the rest of the post starts drawing the concrete shape.
+The authorization half looks no better. [OWASP Top 10:2025](https://owasp.org/Top10/2025/A01_2025-Broken_Access_Control/) keeps Broken Access Control at #1: 100% of tested applications carried some form of access-control failure, with 1,839,701 occurrences in the contributed data, the highest of any category. That's precisely the RBAC and PDP problem this series works through in Parts 5 and 7.
 
-> IAM answers the two questions every request must ask: who are you (authentication) and what can you do (authorization). It's the system's front door, where most web attacks walk in with stolen credentials and where Broken Access Control ranks #1 at OWASP. Get it right once and everything behind it is shielded; wrong once and it's all exposed.
+[CHART: Horizontal lollipop "Credentials in the 2026 DBIR, one number per stage": credential abuse appears in 39% of all breaches · 31% of breaches open with vulnerability exploitation · ~16% open with credential abuse · 50% of ransomware victims had a credential/infostealer event within the prior 95 days | Source: Verizon DBIR 2026 (Verizon newsroom; Push Security; SpyCloud)]
+
+> In Verizon's 2026 DBIR (May 2026), credential abuse appears in 39% of all breaches even though only about 16% of breaches use it as the initial entry point. IBM's Cost of a Data Breach 2025 measures credential-origin breaches at $4.67M on average and 246 days to identify and contain, the slowest of any attack vector.
 
 ## What does this IAM actually do?
 
-It's six things in one process. It's an OAuth2 authorization server (issues access and refresh tokens). It's an OpenID Connect provider (issues id_tokens, with discovery and JWKS). It has RBAC plus per-tenant dynamic permissions. It has federated login through Google, Facebook, and generic OIDC. It has passwordless via OTP and magic link. And it acts as a policy decision point so an API gateway can ask "should this request pass?"
+Six jobs in one Go process: OAuth2 authorization server, OIDC provider, RBAC, federated login, passwordless, and policy decision point. That's not a marketing slide: the repo's router mounts 16 public endpoints across the `/oauth2` and `/auth` groups alone (`router.go`, read 2026-07-12), before counting the Admin API.
 
-Folding them into one service is deliberate, not lazy. Every path to a logged-in user, whether password, social, or OTP, ultimately funnels into the *same* token-issuing flow. So there's one place that signs tokens, one place that attaches permissions, one place that writes the audit log. Adding a new way to log in never spawns a new "token path."
-
-[IMAGE: A block diagram of a single entrance where several login methods all lead to one token-issuing point. | stock: none | gen: Several small doors (password, social, OTP) on the left, all funneling through one central gateway that emits a single glowing key on the right, isometric flat vector illustration, dark navy background, cyan and orange accents, clean geometric lines, no gradients, 3:2, no text, no words, no logos]
-
-## Why build my own instead of using Keycloak or Auth0?
-
-For most teams, the honest answer is *don't*. Keycloak, Auth0, or Cognito cover most of the need and cost far less than self-maintaining a security-critical system. If your team has no truly special requirement, buy it and spend the time on what makes money.
-
-I built my own for three specific needs that the ready-made options charge a premium for or won't let you bend: tenant isolation down to the database layer, a separate OIDC issuer per tenant, and letting tenants define their own permissions at runtime. I'm just naming them here, since each gets its own part to dig into; don't worry if they sound abstract for now.
-
-[CHART] A "build vs. buy" decision table: the left column lists needs (real multi-tenancy, per-tenant issuer, runtime-custom permissions, on-prem data control, cost at scale) and the right marks managed IAM ✔/✘ against self-hosted ✔/✘.
-
-> Building your own IAM service is only worth it when you need something the ready-made products charge a premium for or won't let you customize: tenant isolation at the data layer, a per-tenant OIDC issuer, and permissions the tenant defines at runtime. Missing any one of the three, buying is almost always cheaper than self-maintaining.
-
-`[UNIQUE INSIGHT]` The part people skip: the real cost of "build your own" isn't the day you finish coding. It's rotating signing keys, patching disclosures, and being on call when tokens go out wrong. This whole series is written around those costs, not around the happy path.
-
-## How do the three API groups split the work?
-
-The HTTP surface is cut into three groups by *caller*, not by entity. The **Admin** group (`/api/v1/...`) is for administration: create tenants, users, roles, clients, permissions. The **OAuth2/OIDC** group (`/oauth2/...` and `/.well-known/...`) is the standard set: authorize, token, userinfo, introspect, revoke, discovery, JWKS. The **Auth** group (`/auth/...`) handles end-user flows: register, verify email, forgot/reset password, passwordless, and federation.
-
-This split keeps each endpoint aware of exactly its own job. An admin request runs through admin authorization middleware; an `/oauth2/token` request runs through rate limiting and grant dispatch; a federation callback runs through state verification. All of it sits behind one chi router with cross-cutting middleware: resolve tenant, rate limit, audit, and tracing.
-
-The diagram below is the map I want you to keep for the whole series: clients enter the transport layer, transport calls services, services only talk to interfaces, and Postgres/MySQL/cache/IdPs are just adapters plugged in behind.
-
-```mermaid
-flowchart TB
-  C["HTTP clients<br/>SPA · mobile · service · admin CLI"]
-  subgraph T["Transport — chi router · rate limit · resolve tenant · audit · tracing"]
-    A1["Admin API<br/>/api/v1"]
-    A2["OAuth2 / OIDC<br/>/oauth2 · /.well-known"]
-    A3["Auth API<br/>/auth"]
-  end
-  subgraph S["Service layer — use-cases"]
-    SV["Tenant · User · Role · Permission<br/>Auth · Token · Passwordless · Federation · Audit"]
-  end
-  subgraph AD["Adapters — behind the domain interfaces"]
-    PG[("Postgres")]
-    MY[("MySQL")]
-    CA[("Redis / Dragonfly")]
-    IDP["External IdPs"]
-  end
-  C --> A1 & A2 & A3
-  A1 & A2 & A3 --> SV
-  SV --> PG & MY & CA & IDP
+```text
+/.well-known/openid-configuration     /.well-known/jwks.json
+GET  /oauth2/authorize                POST /oauth2/token
+/oauth2/userinfo                      /oauth2/introspect
+/oauth2/revoke                        /oauth2/logout
+POST /authz/decision
+/auth/passwordless/start
+/auth/login/{provider}                /auth/callback/{provider}
+/auth/register                        /auth/verify-email
+/auth/forgot-password                 /auth/reset-password
 ```
 
-> The IAM surface splits three ways: an Admin API to manage tenant resources, an OAuth2/OIDC API for the standard endpoints that issue and check tokens, and an Auth API for end-user flows like register, passwordless, and federation. All three call one service layer, and that layer talks only to interfaces, never to a concrete database.
+The top half is pure standards: `authorize` and `token` per [RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749), plus the id_token, discovery, and userinfo behavior defined by [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html). One route stands out of line: `POST /authz/decision`, the PDP the API gateway calls on every request. The bottom half is the human side: registration, email verification, password resets, OTP, social login.
 
-## What's in the domain model?
+Why cram all of it into one place? Because every login path, whether password, social, or OTP, ends at exactly one token-issuing flow. One place signs tokens, one place attaches permissions, one place writes audit entries. Adding a new login method never spawns a second token path.
 
-Don't try to memorize the diagram below; you only need the general shape, and tenancy gets a whole Part 2 of its own. At the center sits `Tenant`, and almost everything else hangs beneath it. A tenant has many `User`, `Role`, `Client` (OAuth2 registration), `IdentityProvider` (per-tenant IdP config), `PasswordlessChallenge`, and `AuditEntry`. Each user can have many `UserIdentity` (federated account links) and `VerificationToken`. Roles connect to `Permission` through `role_permissions`, and users connect to roles through `user_roles`.
+[IMAGE: A stylized building with three separate entrances that all lead into one shared hall, illustrating three API surfaces of a single service. | stock: none | gen: An isometric building cut open to show one shared interior, with three separate doorways on different faces, one door with a gear icon, one with a shield icon, one with a person icon, paths from each door merging into a single core room, isometric flat vector illustration, dark navy background, cyan and orange accents, clean geometric lines, no gradients, 16:9, no text, no words, no logos]
 
-The most important invariant, and I'll repeat it in Part 2: every tenant-owned row carries a `tenant_id` column, and every repository method that reads or writes tenant data takes `tenantID` as its first argument. Because of that, cross-tenant leakage is nearly impossible at the repository layer, since no query can "forget" the tenant condition.
+> This service exposes 16 public endpoints across its `/oauth2` and `/auth` route groups (`router.go`, read 2026-07-12), covering the full OAuth2 and OIDC surface: authorize, token, userinfo, introspect, revoke, logout, discovery, and JWKS, plus passwordless and federation flows that all drain into a single token-issuing path.
+
+## Why build one instead of using Keycloak or Auth0?
+
+The honest answer for most teams: don't. In a May 2026 analysis, [Duende Software](https://duendesoftware.com/blog/20260507-the-real-cost-of-build-vs-buy), "The Real Cost of Build vs. Buy for Identity", models a self-built identity stack at roughly $1.1M over 3 years, against about $210K with a bought framework. I built anyway, because of three specific needs that buying couldn't solve.
+
+Read that number correctly first. Duende sells IdentityServer, so this is a vendor's model with an interest behind it, not neutral market research. To their credit, the assumptions are public: a $180K fully loaded engineer, a 3-person team building for 6 months, 0.5-1 FTE of ongoing maintenance, and $50K-200K per year for SOC 2. Cut the model in half if you like; building is still a real investment, not a side project.
+
+Open source has been getting stronger too. The official release notes for [Keycloak 26](https://www.keycloak.org/2024/10/keycloak-2600-released) (October 2024) state: "Starting with Keycloak 26, the Organizations feature is fully supported", meaning first-class multi-tenancy inside a single realm. So what's missing? Three things, for me: organizations still share one realm and one issuer; runtime tenant-defined permissions aren't part of its model; and I wanted IAM embedded in existing Go infrastructure with dual Postgres/MySQL, not another JVM cluster to operate.
+
+<!-- [UNIQUE INSIGHT] -->
+The table below is my own analysis, assembled from Keycloak's release notes, Duende's cost model, and the repo itself:
+
+| Need | Keycloak (Organizations, v26+) | Auth0 / managed | Build |
+|---|---|---|---|
+| One OIDC issuer + JWKS per tenant | No: organizations share a realm and an issuer | Partial: per-tenant orgs, but vendor-hosted, not yours | Yes: per-tenant issuers are native to the design |
+| Tenant-defined permissions at runtime, inside tokens | Limited: static realm/client roles | Limited: built-in RBAC, custom claims via actions | Yes: permissions are data (Part 5) |
+| Embed in existing infra (Go, dual Postgres/MySQL, no extra JVM) | No: brings its own JVM footprint | No: runs outside your infra, priced per MAU | Yes: one Go binary, storage of your choice |
+| The price you pay | Operating a Keycloak cluster | Per-MAU pricing + vendor dependency | You own the security bar + 0.5-1 FTE upkeep (Duende's model) |
+
+[CHART: Grouped bar "3-year cost: build vs buy a framework (Duende's vendor model, assumptions in caption)": DIY year 1 $435K (build $270K + maintenance $90K + compliance $75K), year 2 $280K, year 3 $300K, total ~$1.0-1.1M · Framework year 1 $80K (license $50K + integration $30K), year 2 $65K, year 3 $65K, total ~$210K | Source: Duende Software, "The Real Cost of Build vs. Buy for Identity", 2026-05-07]
+
+> Duende's May 2026 build-vs-buy model prices a self-built identity stack at about $1.1M over 3 years against $210K for a bought framework, assuming a 3-engineer 6-month build and 0.5-1 FTE of maintenance. As the maker of IdentityServer, Duende benefits from that conclusion, but its assumptions are public and checkable.
+
+## Three doors into one service: Admin, OIDC/OAuth2, Auth
+
+The entire HTTP surface splits into 3 route groups, and the router mounts them in two ways: host-based, with a `resolveTenant` middleware reading the request's domain, and a path fallback under `/t/{tenant}` (`router.go`, read 2026-07-12). Each door serves a different kind of caller, with different middleware.
 
 ```mermaid
-flowchart LR
-  TEN["Tenant"] --> USR["User"] & ROL["Role"] & CLI["Client"]
-  TEN --> IDP["IdentityProvider"] & PWL["PasswordlessChallenge"] & AUD["AuditEntry"]
-  USR --> UID["UserIdentity"] & VT["VerificationToken"]
-  USR -. user_roles .-> ROL
-  ROL -. role_permissions .-> PRM["Permission"]
-  SK["SigningKey — global, rotated"]
-  AC["AuthCode / RefreshToken — stored by hash"]
+flowchart TD
+    C["HTTP clients<br/>(browser, SPA, backend service, API gateway)"]
+    C --> A1["Admin API<br/>/api/v1"]
+    C --> A2["OIDC / OAuth2<br/>/oauth2 + /.well-known"]
+    C --> A3["Login flows<br/>/auth"]
+    A1 --> S["Service layer<br/>internal/service"]
+    A2 --> S
+    A3 --> S
+    S --> PG[("Postgres<br/>internal/repository/postgres")]
+    S --> MY[("MySQL<br/>internal/repository/mysql")]
+    S --> CA["Cache<br/>internal/platform/cache"]
+    S --> IDP["External IdPs<br/>google | facebook | oidcgeneric"]
 ```
 
-One small but sharp detail: `Permission` has a pointer `TenantID`. `TenantID == nil` means a system permission, seeded from code. `TenantID != nil` means a permission a tenant created at runtime. One table, two lifecycles, told apart only by whether that column is null. Part 5 dissects this.
+Group one, wired by `mountAdminRoutes`, hangs off `/api/v1`: CRUD for tenants, users, roles, clients, identity providers, permissions, and resources. It's the door for admin consoles and automation. Group two is `/oauth2` plus `/.well-known`: the standards door every OIDC client library already understands. Group three, `/auth`, holds the human login flows: register, passwordless, social callbacks.
 
-## Why hexagonal, and why two backends at once?
+One detail worth noticing: `mountOIDCRoutes` is mounted twice. Once host-based, resolving the tenant from the request's domain. Once under `/t/{slug}`, as a fallback for tenants that haven't pointed a custom domain yet. Same handlers, two ways of locating the tenant; Part 2 dissects that resolve chain.
 
-Because I wanted to swap infrastructure without touching business logic. In a hexagonal architecture, `internal/domain` holds entities and repository interfaces with no external dependencies. All the SQL, cache, and HTTP are adapters behind those interfaces. The direct consequence: Postgres and MySQL are both first-class, chosen by config at startup through a storage factory, and the service layer never knows which one it's running on.
+## The domain model: a whole system in 15 entities
 
-The approach I rejected is putting SQL straight into services. It's quick at first, but every driver swap or test then needs a real database standing up. With hexagonal, testing a service needs only a fake repository. The price is more interfaces and a little adapter boilerplate, but in return you get a clean line between "logic" and "where the wires plug in."
+`internal/domain` is the smallest layer in the repo: 733 non-test lines of Go (my count, 2026-07-12), yet it declares all 15 entities the other layers orbit, with `Tenant` at the root of every ownership relation.
 
-`[ORIGINAL DATA]` Concretely in the repo: `internal/` holds 13 packages (domain, service, repository, storage, transport, auth, rbac, tenant, authctx, observability, platform, config, mocks), about a dozen domain entities, and 7 grant types split into 7 separate files. Small numbers, but clean boundaries.
+[IMAGE: A close-up of a wall of grey hexagonal tiles with soft backlighting, each tile identical but clearly separated from its neighbors, like tenants in one system. | stock: https://images.unsplash.com/photo-1582135739786-3bceafcaea85?w=1200&h=800&fit=crop&q=80 | gen: One large hexagon in the foreground containing small connected icons of a person, a shield, and a key linked by thin lines, with two dimmer hexagons behind it repeating the same internal structure, isometric flat vector illustration, dark navy background, cyan and orange accents, clean geometric lines, no gradients, 3:2, no text, no words, no logos]
 
-> Hexagonal here isn't about "doing it by the book." It's the tool that keeps two SQL backends both working, lets service tests skip the database, and keeps the logic layer from ever depending on a specific driver. That's an engineering reason, not an architectural preference.
+```go
+// internal/domain/tenant.go
+type Tenant struct {
+    ID       string
+    Slug     string
+    Name     string
+    Status   TenantStatus
+    Settings TenantSettings // per-tenant access/refresh token config
+    Metadata Metadata
+    // ...
+}
+```
 
-## How is the service stateless and horizontally scalable?
+Around that root sit four clusters: identity (`User`, `UserIdentity`, `VerificationToken`), authorization (`Role`, `Permission`, `Resource`), the OAuth2 machinery (`Client`, `AuthCode`, `RefreshToken`, `SigningKey`), and login flows (`IdentityProvider`, `PasswordlessChallenge`, `LoginSession`), plus `AuditEntry` for the trail. `User` carries `TenantID` directly as its ownership key; there's no "global" user anywhere.
 
-By keeping no tenant state in process memory. All state lives in the database or a distributed cache: signing keys in their own table, federation and passwordless flow state in the cache with a TTL, rate-limit counters in the cache too. So you can run any number of instances behind a load balancer, and a request can land on any pod without a sticky session.
+What's absent says more than what's present: no pgx import, no SQL tags, no HTTP types. The domain is plain Go structs and interfaces. Why does that matter? The next section is the answer.
 
-[CALLOUT] The one-line rule for the whole service: the process remembers nothing. Want to know if a token is still valid? Ask the database. Want to know if a federation state is legit? Ask the cache. There's no tenant map or session living in RAM to lose when a pod restarts.
+## Hexagonal with two SQL backends: why carry double the work?
 
-The tradeoff is that most operations cost a round-trip to the database or cache. But it's worth paying: an auth system that can't scale horizontally becomes the bottleneck for every other service sitting behind it.
+<!-- [ORIGINAL DATA] -->
+The repo currently holds 22,082 lines of Go across 173 files and 37 packages; strip the tests and 16,469 lines remain (counted with `wc -l` and `go list`, 2026-07-12). The thickest layer after transport is repository, at 2,963 lines, because it implements one set of interfaces twice: Postgres on pgx and MySQL on `database/sql`.
 
-## What will the series cover?
+> The repo's ARCHITECTURE.md sets the rule: "domain entities and repository interfaces live in `internal/domain` with no external dependencies. All infrastructure (SQL, cache, HTTP) is an adapter behind those interfaces." Services call interfaces; which adapter stands behind them is a configuration detail, and that's exactly what makes the dual backend possible.
 
-Part 1 is the map. The six parts that follow each go into one region, each opening with "why do we need it?" before "how," and each carrying at least one diagram you can trace.
+Here's what a port looks like; note `tenantID` leading the signature:
 
-1. `[INTERNAL-LINK: Part 2 - Multi-tenancy by one tenant_id column → multi-tenant-by-column-tenant-id]` how tenants are isolated and the three-stage tenant resolution.
-2. `[INTERNAL-LINK: Part 3 - The grant registry → oauth2-grant-registry-design]` turning `/token` into a dispatcher so you add login methods without editing the endpoint.
-3. `[INTERNAL-LINK: Part 4 - Refresh token rotation → refresh-token-rotation-reuse-detection]` the token lifecycle, reuse detection, and rotating signing keys without dropping tokens.
-4. `[INTERNAL-LINK: Part 5 - RBAC with dynamic permissions → rbac-dynamic-tenant-permissions]` the permission model and letting tenants define permissions at runtime.
-5. `[INTERNAL-LINK: Part 6 - Federation and passwordless → federated-login-passwordless-one-flow]` many auth methods converging on one code flow.
-6. `[INTERNAL-LINK: Part 7 - IAM as a Policy Decision Point → iam-policy-decision-point-gateway]` pushing authorization out to the API gateway.
-7. `[INTERNAL-LINK: Part 8 - Secrets at rest, rate limits, observability → iam-security-hardening-observability]` the production things nobody teaches.
+```go
+// internal/domain/repository.go
+type UserRepository interface {
+    Create(ctx context.Context, u *User) error
+    GetByID(ctx context.Context, tenantID, id string) (*User, error)
+    // ...
+}
+```
 
-## FAQ
+That parameter order isn't cosmetic. It's the cross-tenant isolation invariant, and Part 2 is built around it. The factory then picks the backend at startup:
 
-**Can Keycloak do multi-tenancy?**
-Yes, through realms, and for many teams that's plenty. But realms lean toward isolation by configuration rather than isolation down to each row of data, and bending the permission model to your product gets awkward. If you need permissions a tenant defines at runtime, that's when building your own is worth weighing.
+```go
+// internal/storage/storage.go
+func Open(ctx context.Context, cfg config.DBConfig) (*Repositories, error) {
+    switch cfg.Driver {
+    case config.DriverPostgres:
+        // pgx pool -> postgres.New(pool)
+    case config.DriverMySQL:
+        // database/sql -> mysql.New(conn)
+    }
+    // either way: the same bundle of 15 repositories
+}
+```
 
-**Do I need OIDC for internal-only login?**
-If a single app issues and checks its own tokens, plain OAuth2 is enough. You want OIDC when several apps trust one identity: id_token, discovery, and JWKS let each app verify a token independently without calling back to the server, exactly what makes credential-theft-driven attacks (88% of web-app attacks) harder to pull off.
+Feeding two backends sounds like double the work, and at the adapter layer it honestly is. In exchange, the interfaces are forced to stay honest: a single Postgres-only query leaking into the service layer breaks the MySQL adapter at build time. The rejected alternative was mixing SQL straight into services: faster on day one, and it welds you to a single database while turning every migration into surgery.
 
-**Postgres or MySQL?**
-Both work, because the repository layer sits behind interfaces. Postgres is nicer for `jsonb` `metadata` and some partial-unique constraints; MySQL wins when your team already operates it well. Choose by your team, not by hype, knowing a later switch won't touch business logic.
+[CHART: Donut "Where 16.5K non-test Go lines live": transport 3,396 · service 3,102 · repository 2,963 · auth 2,373 · platform 893 · domain 733 · other internal 729 · cmd/migrations/sdk ~2,280 | Source: author's count from the iam repo, 2026-07-12]
 
-**How long does adding a new grant take?**
-Structurally, it's one file: implement the `Grant` interface, then register it in the registry at startup. Part 3 shows how this very split lets the 7 existing grants be tested in isolation, and why a dispatcher beats one giant `switch`.
+## How does a stateless service scale out?
 
-## Up next
+The number to remember here is 0: per the repo's ARCHITECTURE.md (read 2026-07-12), the process keeps no tenant state in memory; everything lives in the database or the distributed cache. Need more capacity? Add replicas. That's the entire procedure.
 
-You now have the map: six capabilities in one stateless, multi-tenant Go service, built on a hexagonal core. From Part 2, I go into the most foundational and most error-prone piece: how one shared database serves many tenants without ever leaking across them, and why I return `ErrNotFound` rather than `ErrForbidden` when someone probes another tenant's ID.
+[IMAGE: A rack of server equipment glowing with small status lights inside a dimly lit data center room, suggesting nodes added and removed with load. | stock: https://images.unsplash.com/photo-1680992046626-418f7e910589?w=1280&h=720&fit=crop&q=80 | gen: A row of four identical server nodes drawn as simple boxes, arrows from all four converging down onto one shared database cylinder and one cache slab beneath them, one node faded out mid-removal to suggest elasticity, isometric flat vector illustration, dark navy background, cyan and orange accents, clean geometric lines, no gradients, 16:9, no text, no words, no logos]
 
-`[INTERNAL-LINK: Read Part 2 - Multi-tenancy by one tenant_id column → multi-tenant-by-column-tenant-id]`
+Federated login state is the clearest example. The `state` parameter of an in-flight social login lives in the cache under a namespaced key with a TTL, so the callback from Google can land on any replica:
 
-_References: [RFC 6749 - The OAuth 2.0 Authorization Framework](https://www.rfc-editor.org/rfc/rfc6749), [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html), [OWASP Top 10:2021 - A01 Broken Access Control](https://owasp.org/Top10/2021/A01_2021-Broken_Access_Control/), [Verizon 2025 Data Breach Investigations Report](https://www.verizon.com/business/resources/reports/dbir/)._
+```go
+// internal/transport/http/handler/federation.go
+func flowStateKey(state string) string { return "fed:state:" + state }
+// ...
+h.cache.Set(ctx, flowStateKey(state), b, flowStateTTL)
+```
+
+Rate limiting follows the same rule: `middleware.NewRateLimiter(d.Cache, d.Logger)` counts against the shared cache, so limits hold across nodes instead of resetting per pod.
+
+Statelessness has a price. The cache stops being an optimization and becomes part of correctness: lose it, and in-flight login flows die with it. What you buy in return is deploys without drama: kill a pod and nobody gets logged out, because no session ever lived inside a pod. For a system where every minute of downtime means users locked out, that trade is easy to take.
+
+> "The process holds no in-memory tenant state. All state lives in the DB or the distributed cache. Horizontal scaling is safe" (ARCHITECTURE.md, iam repo, read 2026-07-12). For an IAM service this means login-flow state, rate-limit counters, and temporary challenges all live in the shared cache, never in a local variable.
+
+## The series roadmap: 7 remaining pieces of the map
+
+Every part that follows digs into one region of the map above, and each region has real code behind it rather than pseudocode. One example right away: `/token` isn't a giant switch statement; it dispatches through a registry that registers exactly 7 grants (`buildGrantRegistry`, `router.go`, read 2026-07-12).
+
+```go
+// internal/auth/grant/grant.go
+type Grant interface {
+    Type() string
+    Handle(ctx context.Context, req *Request) (*TokenResponse, error)
+}
+
+type Registry struct {
+    grants map[string]Grant
+}
+```
+
+Here's where the series goes from here:
+
+- [INTERNAL-LINK: Part 2: multi-tenancy with one tenant_id column, what it wins and costs → multi-tenant-by-column-tenant-id]. The isolation invariant, the tenant resolve chain, and one OIDC issuer per tenant.
+- [INTERNAL-LINK: Part 3: a grant registry for the /token endpoint → oauth2-grant-registry-design]. The `Grant` interface above, PKCE, and adding login methods without touching old code.
+- [INTERNAL-LINK: Part 4: refresh token rotation and chain revocation → refresh-token-rotation-reuse-detection]. Tokens stored as SHA-256 hashes, reuse detection, and signing-key rotation with zero downtime.
+- [INTERNAL-LINK: Part 5: RBAC with tenant-defined permissions → rbac-dynamic-tenant-permissions]. `resource:action` wildcards and how permissions travel into the JWT.
+- [INTERNAL-LINK: Part 6: federated login and passwordless on one flow → federated-login-passwordless-one-flow]. One adapter per IdP, and why everything funnels into a single authorization code.
+- [INTERNAL-LINK: Part 7: the IAM as a policy decision point for the gateway → iam-policy-decision-point-gateway]. The `/authz/decision` contract and the Kong plugin.
+- [INTERNAL-LINK: Part 8: secrets at rest, rate limits, observability → iam-security-hardening-observability]. The production concerns nobody teaches.
+
+[CALLOUT] Can you read out of order? Yes, each part stands alone. Two soft dependencies exist, though: Part 2 is the foundation Part 5 builds on, and Part 3 belongs before Part 4, since grants are where tokens are born.
+
+## Frequently asked questions
+
+### Can Keycloak do multi-tenancy?
+
+Yes, to a degree that's enough for many teams: since Keycloak 26 (October 2024), the Organizations feature is fully supported per Keycloak's official release notes. Weigh the catch: organizations share one realm, which means one issuer and one JWKS. If you need per-tenant issuers or runtime permissions, you're back to realm-per-tenant, or to building.
+
+### Do I need OIDC if login is internal-only?
+
+It's worth it, because you inherit flows that have been attacked and patched for over a decade instead of inventing your own sessions. RFC 9700 (January 2025) even standardizes the MUSTs, like PKCE for public clients. Remember that credential-origin breaches take 246 days to detect (IBM, 2025): this is no place to be creative.
+
+### Postgres or MySQL?
+
+Both are first-class in this design: 15 repositories implement the same domain interfaces, each backend ships its own migrations, and `storage.Open` picks the driver from `config.DBConfig.Driver`. The real question is which one your team already operates well; the service doesn't lean either way.
+
+### How much upkeep does building cost?
+
+Duende's May 2026 model budgets 0.5-1 FTE of continuous maintenance, plus $50K-200K a year if you need SOC 2. The repo behind this series weighs 22,082 lines of Go with hexagonal layering and the dual backend already in place. Not a small number; put it on the scale against the three needs in the build-vs-buy section.
+
+## The map first, the details next
+
+Four bullets hold the whole architecture: one stateless Go service; three API doors for three kinds of callers; a hexagonal domain with two SQL backends taking turns behind one set of interfaces; and every login path converging on a single token-issuing flow. Each decision came with a rejected alternative and the reason for rejecting it, and credentials touching 39% of all breaches (DBIR 2026) is the biggest reason to do all of this carefully. The logical next step is the foundation under everything else: the `tenant_id` column and the invariant that stops cross-tenant leaks. [INTERNAL-LINK: continue with Part 2: multi-tenancy with one tenant_id column → multi-tenant-by-column-tenant-id]
+
+## Sources
+
+- Verizon, "2026 Data Breach Investigations Report" (newsroom), retrieved 2026-07-12, https://www.verizon.com/about/news/breach-industry-wide-dbir-finds
+- Push Security, "What the Verizon DBIR tells us about breaches in 2026", retrieved 2026-07-12, https://pushsecurity.com/blog/verizon-dbir-2026-review
+- SpyCloud, "Top Takeaways from the 2026 Verizon DBIR", retrieved 2026-07-12, https://spycloud.com/blog/top-takeaways-from-the-2026-verizon-data-breach-investigations-report/
+- OWASP, "A01:2025 Broken Access Control (OWASP Top 10:2025)", retrieved 2026-07-12, https://owasp.org/Top10/2025/A01_2025-Broken_Access_Control/
+- IBM, "Cost of a Data Breach Report 2025", retrieved 2026-07-12 (figures cross-checked via SpyCloud and Enzoic because the primary page blocks automated access), https://www.ibm.com/reports/data-breach
+- Enzoic, "IBM Cost of a Data Breach Report 2025", retrieved 2026-07-12, https://www.enzoic.com/blog/ibm-cost-of-a-data-breach-report-2025/
+- Duende Software, "The Real Cost of Build vs. Buy for Identity", retrieved 2026-07-12, https://duendesoftware.com/blog/20260507-the-real-cost-of-build-vs-buy
+- Keycloak, "Keycloak 26.0.0 released", retrieved 2026-07-12, https://www.keycloak.org/2024/10/keycloak-2600-released
+- IETF, "RFC 6749: The OAuth 2.0 Authorization Framework", retrieved 2026-07-12, https://datatracker.ietf.org/doc/html/rfc6749
+- IETF, "RFC 9700: Best Current Practice for OAuth 2.0 Security", retrieved 2026-07-12, https://datatracker.ietf.org/doc/html/rfc9700
+- OpenID Foundation, "OpenID Connect Core 1.0", retrieved 2026-07-12, https://openid.net/specs/openid-connect-core-1_0.html
+- ndmt1at21, "iam" repository (author's own measurements: LOC, packages, routes, counted 2026-07-12), https://github.com/ndmt1at21/iam
